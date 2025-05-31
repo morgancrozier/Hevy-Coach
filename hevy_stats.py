@@ -398,6 +398,7 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
     for exercise, exercise_data in latest_session.groupby("exercise"):
         sets_data = []
         total_volume = 0
+        rpe_values = []
         
         for _, row in exercise_data.iterrows():
             set_volume = (row["weight"] * row["reps"]) if row["weight"] > 0 else 0
@@ -408,38 +409,66 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
                 "rpe": row["rpe"],
                 "volume": set_volume
             })
+            if row["rpe"] and not pd.isna(row["rpe"]):
+                rpe_values.append(row["rpe"])
         
         rep_range = REP_RANGE.get(exercise, None)
         avg_reps = exercise_data["reps"].mean()
         avg_weight = exercise_data["weight"].mean()
         avg_rpe = exercise_data["rpe"].mean()
         
-        # Determine verdict for this session
+        # Get peak (highest) and final set RPE for better analysis
+        peak_rpe = max(rpe_values) if rpe_values else None
+        final_rpe = rpe_values[-1] if rpe_values else None
+        
+        # Determine verdict for this session - prioritize RPE over rep ranges
         if rep_range is None or rep_range[0] is None:
             verdict = "❓ no target"
             suggestion = "add rep target to rep_rules.py"
-        elif avg_reps < rep_range[0]:
-            verdict = "⬇️ too heavy"
-            new_weight = avg_weight * 0.9
-            suggestion = f"reduce to ~{new_weight:.1f}kg next time"
-        elif avg_reps > rep_range[1]:
-            verdict = "⬆️ too light"
-            new_weight = avg_weight * 1.05
-            suggestion = f"increase to ~{new_weight:.1f}kg next time"
         else:
-            verdict = "✅ in range"
-            # RPE-based fine-tuning even when reps are in range
-            if avg_rpe and not pd.isna(avg_rpe):
-                if avg_rpe < RPE_GUIDELINES["increase_threshold"]:
-                    new_weight = avg_weight * RPE_GUIDELINES["increase_factor"]
-                    suggestion = f"increase to ~{new_weight:.1f}kg next time (RPE {avg_rpe:.1f} too low)"
-                elif avg_rpe > RPE_GUIDELINES["decrease_threshold"]:
-                    new_weight = avg_weight * RPE_GUIDELINES["decrease_factor"]
-                    suggestion = f"reduce to ~{new_weight:.1f}kg next time (RPE {avg_rpe:.1f} too high)"
+            # First check RPE if available (RPE takes priority)
+            if peak_rpe and not pd.isna(peak_rpe):
+                if peak_rpe >= 9.5:
+                    verdict = "⬇️ too heavy"
+                    new_weight = avg_weight * 0.95
+                    suggestion = f"reduce to ~{new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too high)"
+                elif peak_rpe <= 7.0:
+                    verdict = "⬆️ too light"
+                    new_weight = avg_weight * 1.05
+                    suggestion = f"increase to ~{new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too low)"
+                elif final_rpe and final_rpe >= 9.0:
+                    # Final set at RPE 9+ means good progression to failure
+                    verdict = "✅ optimal"
+                    suggestion = "perfect intensity - maintain this weight!"
+                elif 7.5 <= peak_rpe <= 9.0:
+                    verdict = "✅ optimal"
+                    suggestion = "perfect intensity - maintain this weight!"
                 else:
-                    suggestion = "perfect - maintain this weight!"
+                    # Fall back to rep-based analysis with RPE adjustment
+                    if avg_reps < rep_range[0]:
+                        verdict = "⬇️ too heavy"
+                        new_weight = avg_weight * 0.9
+                        suggestion = f"reduce to ~{new_weight:.1f}kg next time"
+                    elif avg_reps > rep_range[1]:
+                        verdict = "⬆️ too light"
+                        new_weight = avg_weight * 1.05
+                        suggestion = f"increase to ~{new_weight:.1f}kg next time"
+                    else:
+                        verdict = "✅ in range"
+                        suggestion = "maintain this weight (good RPE and reps)"
             else:
-                suggestion = "maintain this weight (no RPE data)"
+                # No RPE data, fall back to rep-based analysis only
+                if avg_reps < rep_range[0]:
+                    verdict = "⬇️ too heavy"
+                    new_weight = avg_weight * 0.9
+                    suggestion = f"reduce to ~{new_weight:.1f}kg next time"
+                elif avg_reps > rep_range[1]:
+                    verdict = "⬆️ too light"
+                    new_weight = avg_weight * 1.05
+                    suggestion = f"increase to ~{new_weight:.1f}kg next time"
+                else:
+                    verdict = "✅ in range"
+                    suggestion = "maintain this weight (no RPE data)"
         
         workout_info["exercises"].append({
             "name": exercise,
@@ -448,6 +477,8 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
             "avg_weight": avg_weight,
             "avg_reps": avg_reps,
             "avg_rpe": avg_rpe,
+            "peak_rpe": peak_rpe,
+            "final_rpe": final_rpe,
             "total_volume": total_volume,
             "verdict": verdict,
             "suggestion": suggestion,
@@ -564,9 +595,14 @@ def print_comprehensive_report(df: pd.DataFrame):
             efficiency = data["efficiency_score"]
             absolute_latest_date = data["absolute_latest_date"]
             
-            print(f"\n**{exercise}** (Decision Efficiency: {efficiency:.0f}%)")
+            # Get target rep range for context
+            rep_range = REP_RANGE.get(exercise, None)
+            target_info = f" (target: {rep_range[0]}-{rep_range[1]} reps)" if rep_range and rep_range[0] else " (no target set)"
             
-            # Show session-by-session analysis
+            print(f"\n**{exercise}**{target_info}")
+            print(f"   Decision Efficiency: {efficiency:.0f}% | Sessions Analyzed: {len(sessions)}")
+            
+            # Show session-by-session analysis with detailed RPE context
             session_strs = []
             for session in sessions[:4]:  # Show last 4 sessions
                 days_ago = (absolute_latest_date - session["date"]).days
@@ -583,49 +619,181 @@ def print_comprehensive_report(df: pd.DataFrame):
                     "❓ no target": "❓"
                 }.get(session["verdict"], "❓")
                 
-                session_str = f"{session['avg_weight']:.1f}kg×{session['avg_reps']:.1f} {verdict_emoji} ({age_str})"
+                # Build detailed session string with RPE context
+                session_str = f"{session['avg_weight']:.1f}kg×{session['avg_reps']:.1f}"
+                
+                # Add RPE information if available
+                if session.get("peak_rpe") and not pd.isna(session["peak_rpe"]):
+                    rpe_str = f"@{session['peak_rpe']:.1f}"
+                    if session.get("final_rpe") and session["final_rpe"] != session["peak_rpe"]:
+                        rpe_str += f"(final:{session['final_rpe']:.1f})"
+                    session_str += rpe_str
+                
+                session_str += f" {verdict_emoji} ({age_str})"
                 session_strs.append(session_str)
             
             print(f"   Sessions: {' → '.join(session_strs)}")
             
-            # Show missed opportunities
-            if data["missed_opportunities"]:
-                print(f"   ⚠️ **Missed Opportunities**:")
-                for miss in data["missed_opportunities"][:2]:  # Show top 2 missed opportunities
-                    days_ago = (absolute_latest_date - miss["to_date"]).days
-                    print(f"     • {days_ago}d ago: {miss['missed_opportunity']}")
+            # Show weight progression between sessions
+            if len(sessions) >= 2:
+                print(f"   Weight Changes:")
+                for i in range(len(sessions) - 1):
+                    current = sessions[i]
+                    previous = sessions[i + 1]
+                    weight_change = current["avg_weight"] - previous["avg_weight"]
+                    
+                    curr_days = (absolute_latest_date - current["date"]).days
+                    prev_days = (absolute_latest_date - previous["date"]).days
+                    
+                    curr_str = "today" if curr_days == 0 else f"{curr_days}d ago"
+                    prev_str = "today" if prev_days == 0 else f"{prev_days}d ago"
+                    
+                    if abs(weight_change) >= 0.1:
+                        change_pct = (weight_change / previous["avg_weight"]) * 100 if previous["avg_weight"] > 0 else 0
+                        change_direction = "📈" if weight_change > 0 else "📉"
+                        print(f"     • {prev_str} → {curr_str}: {weight_change:+.1f}kg ({change_pct:+.1f}%) {change_direction}")
+                    else:
+                        print(f"     • {prev_str} → {curr_str}: maintained weight ➡️")
             
-            # Show good decisions  
+            # Show detailed missed opportunities with RPE context
+            if data["missed_opportunities"]:
+                print(f"   ⚠️ **Missed Opportunities** ({len(data['missed_opportunities'])} total):")
+                for miss in data["missed_opportunities"][:3]:  # Show top 3 missed opportunities
+                    days_ago = (absolute_latest_date - miss["to_date"]).days
+                    
+                    # Find the session that led to this missed opportunity
+                    prev_session = None
+                    curr_session = None
+                    for i, session in enumerate(sessions):
+                        if session["date"] == miss["to_date"]:
+                            curr_session = session
+                            if i + 1 < len(sessions):
+                                prev_session = sessions[i + 1]
+                            break
+                    
+                    # Create detailed explanation
+                    explanation = miss['missed_opportunity']
+                    if prev_session and curr_session:
+                        # Add detailed RPE and rep context
+                        prev_rpe = prev_session.get("peak_rpe")
+                        curr_rpe = curr_session.get("peak_rpe")
+                        
+                        context_parts = []
+                        
+                        # RPE context
+                        if prev_rpe and not pd.isna(prev_rpe):
+                            if prev_rpe >= 9.5:
+                                context_parts.append(f"previous RPE {prev_rpe:.1f} was too high")
+                            elif prev_rpe <= 7.0:
+                                context_parts.append(f"previous RPE {prev_rpe:.1f} was too low")
+                            elif prev_session["verdict"] == "✅ optimal":
+                                context_parts.append(f"previous session was optimal at RPE {prev_rpe:.1f}")
+                        
+                        # Rep context
+                        if rep_range and rep_range[0]:
+                            prev_reps = prev_session["avg_reps"]
+                            if prev_reps < rep_range[0]:
+                                context_parts.append(f"previous reps {prev_reps:.1f} below target {rep_range[0]}-{rep_range[1]}")
+                            elif prev_reps > rep_range[1]:
+                                context_parts.append(f"previous reps {prev_reps:.1f} above target {rep_range[0]}-{rep_range[1]}")
+                        
+                        if context_parts:
+                            explanation += f" ({', '.join(context_parts)})"
+                    
+                    print(f"     • {days_ago}d ago: {explanation}")
+            
+            # Show good decisions with detailed context
             if data["good_decisions"]:
                 recent_good = [d for d in data["good_decisions"] if 
-                             (absolute_latest_date - d["to_date"]).days <= 7]
+                             (absolute_latest_date - d["to_date"]).days <= 14]  # Show more recent decisions
                 if recent_good:
-                    print(f"   ✅ **Recent Good Decisions**: {len(recent_good)} optimal weight changes")
+                    print(f"   ✅ **Good Decisions** ({len(recent_good)} in last 2 weeks):")
+                    
+                    # Show examples of good decisions with context
+                    for good_example in recent_good[:2]:  # Show top 2 examples
+                        days_ago = (absolute_latest_date - good_example["to_date"]).days
+                        
+                        # Find the sessions involved
+                        for i, session in enumerate(sessions):
+                            if session["date"] == good_example["to_date"]:
+                                curr_session = session
+                                prev_session = sessions[i + 1] if i + 1 < len(sessions) else None
+                                break
+                        
+                        if prev_session and curr_session:
+                            action_desc = {
+                                "increased": "increased weight",
+                                "decreased": "decreased weight", 
+                                "maintained": "maintained weight"
+                            }.get(good_example["action"], good_example["action"])
+                            
+                            weight_change = good_example.get("weight_change", 0)
+                            
+                            # Add context about why it was good
+                            prev_rpe = prev_session.get("peak_rpe")
+                            reasoning = ""
+                            if prev_rpe and not pd.isna(prev_rpe):
+                                if good_example["action"] == "increased" and prev_rpe <= 7.5:
+                                    reasoning = f" (responded to low RPE {prev_rpe:.1f})"
+                                elif good_example["action"] == "decreased" and prev_rpe >= 9.5:
+                                    reasoning = f" (responded to high RPE {prev_rpe:.1f})"
+                                elif good_example["action"] == "maintained" and 7.5 <= prev_rpe <= 9.0:
+                                    reasoning = f" (optimal RPE {prev_rpe:.1f})"
+                            
+                            age_str = "today" if days_ago == 0 else f"{days_ago}d ago"
+                            change_str = f" ({weight_change:+.1f}kg)" if abs(weight_change) >= 0.1 else ""
+                            print(f"     • {age_str}: {action_desc}{change_str}{reasoning}")
             
-            # Learning insight
-            if efficiency < 50:
-                print(f"   💡 **Key Learning**: Focus on RPE feedback - weight changes seem reactive rather than proactive")
+            # Enhanced learning insights based on efficiency and RPE patterns
+            print(f"   💡 **Key Learning**:", end=" ")
+            if efficiency < 30:
+                print(f"Strong focus needed on RPE interpretation - review guidelines below")
+            elif efficiency < 50:
+                print(f"Focus on RPE feedback - aim for peak RPE 8-9 on final sets")
             elif efficiency < 75:
-                print(f"   💡 **Key Learning**: Good overall, but a few missed opportunities for faster progression")
+                print(f"Good overall, trust your RPE readings more for weight adjustments")
             else:
-                print(f"   💡 **Key Learning**: Excellent decision making - keep following your instincts!")
+                print(f"Excellent RPE-based decisions - keep listening to your body!")
+            
+            # Add specific recommendations for this exercise
+            if data["missed_opportunities"]:
+                latest_miss = data["missed_opportunities"][0]
+                if "should have increased" in latest_miss["missed_opportunity"]:
+                    print(f"   🎯 **Next Session**: If RPE ≤7.5, increase weight ~2-5%")
+                elif "should have decreased" in latest_miss["missed_opportunity"]:
+                    print(f"   🎯 **Next Session**: If RPE ≥9.5, decrease weight ~2-5%")
+                else:
+                    print(f"   🎯 **Next Session**: Aim for peak RPE 8-9 on final set")
+            else:
+                print(f"   🎯 **Next Session**: Continue current approach - it's working well!")
         
-        # Overall evolution insights
+        # Enhanced overall evolution insights
         avg_efficiency = sum(data["efficiency_score"] for data in exercise_evolution.values()) / len(exercise_evolution)
         total_decisions = sum(data["total_decisions"] for data in exercise_evolution.values())
         total_missed = sum(len(data["missed_opportunities"]) for data in exercise_evolution.values())
+        total_good = sum(len(data["good_decisions"]) for data in exercise_evolution.values())
         
-        print(f"\n📊 **Overall Decision Quality**:")
-        print(f"• **Average Efficiency**: {avg_efficiency:.0f}% across all exercises")
-        print(f"• **Total Decisions Analyzed**: {total_decisions}")
-        print(f"• **Missed Opportunities**: {total_missed} (learning potential)")
+        print(f"\n📊 **Overall Decision Quality Summary**:")
+        print(f"• **Average Efficiency**: {avg_efficiency:.0f}% across {len(exercise_evolution)} exercises")
+        print(f"• **Total Decisions**: {total_decisions} | Good: {total_good} | Missed: {total_missed}")
+        print(f"• **Learning Potential**: {total_missed} decisions to optimize")
         
         if avg_efficiency >= 80:
-            print(f"• 🌟 **Assessment**: Excellent intuitive coaching - you're making great decisions!")
+            print(f"• 🌟 **Assessment**: Excellent RPE awareness - you're making great decisions!")
+            print(f"• 🎯 **Focus**: Fine-tune minor details, maintain current approach")
         elif avg_efficiency >= 65:
-            print(f"• 🎯 **Assessment**: Good decision making with room for optimization")
+            print(f"• 🎯 **Assessment**: Good decision making - fine-tune RPE interpretation")
+            print(f"• 📈 **Focus**: Pay closer attention to RPE 9+ sessions (reduce weight next time)")
         else:
-            print(f"• 📚 **Assessment**: Significant learning opportunity - pay closer attention to RPE and rep feedback")
+            print(f"• 📚 **Assessment**: Significant learning opportunity with RPE patterns")
+            print(f"• 🔥 **Focus**: RPE 9.5+ = too hard, RPE 7- = too easy")
+        
+        print(f"\n💡 **Complete RPE Decision Guide**:")
+        print(f"• **Peak RPE 6-7**: Too easy → increase weight 2-5% next session")
+        print(f"• **Peak RPE 7.5-8.5**: Perfect intensity → maintain or small increase (+1-2%)")
+        print(f"• **Peak RPE 9-9.5**: Challenging but good → maintain weight, focus on form")
+        print(f"• **Peak RPE 9.5+**: Too hard → decrease weight 2-5% next session")
+        print(f"• **Final set RPE 9+**: Excellent progression to failure - ideal training")
     
     # ========================
     # 4. PERIODIZATION & PLATEAU DETECTION
@@ -734,7 +902,12 @@ def print_comprehensive_report(df: pd.DataFrame):
             print(f"   Average: {ex['avg_weight']:.1f}kg × {ex['avg_reps']:.1f} reps")
             
             if ex["avg_rpe"] and not pd.isna(ex["avg_rpe"]):
-                print(f"   RPE: {ex['avg_rpe']:.1f}")
+                rpe_info = f"RPE: {ex['avg_rpe']:.1f}"
+                if ex.get("peak_rpe") and not pd.isna(ex["peak_rpe"]):
+                    rpe_info += f" (peak: {ex['peak_rpe']:.1f})"
+                if ex.get("final_rpe") and not pd.isna(ex["final_rpe"]) and ex["final_rpe"] != ex["peak_rpe"]:
+                    rpe_info += f" (final: {ex['final_rpe']:.1f})"
+                print(f"   {rpe_info}")
             
             print(f"   Volume: {ex['total_volume']:.0f}kg")
             print(f"   **{ex['verdict']}** → {ex['suggestion']}")
@@ -937,18 +1110,22 @@ def calculate_session_quality(last_session: Dict, progression_data: Dict) -> Dic
     for exercise in last_session["exercises"]:
         exercise_name = exercise["name"]
         
-        # RPE quality (7-9 is ideal)
-        if exercise["avg_rpe"] and not pd.isna(exercise["avg_rpe"]):
-            rpe = exercise["avg_rpe"]
-            if 7.5 <= rpe <= 9.0:
+        # RPE quality using peak RPE (7.5-9.0 is ideal range)
+        peak_rpe = exercise.get("peak_rpe")
+        final_rpe = exercise.get("final_rpe")
+        
+        if peak_rpe and not pd.isna(peak_rpe):
+            if 7.5 <= peak_rpe <= 9.0:
                 rpe_score = 100  # Perfect RPE range
-            elif 7.0 <= rpe < 7.5:
-                rpe_score = 85   # Slightly too easy
-            elif 9.0 < rpe <= 9.5:
-                rpe_score = 85   # Slightly too hard
-            elif 6.5 <= rpe < 7.0:
-                rpe_score = 70   # Too easy
-            elif 9.5 < rpe <= 10:
+            elif final_rpe and final_rpe >= 9.0 and peak_rpe <= 9.5:
+                rpe_score = 95   # Good progression to failure
+            elif 7.0 <= peak_rpe < 7.5:
+                rpe_score = 80   # Slightly too easy
+            elif 9.0 < peak_rpe <= 9.5:
+                rpe_score = 85   # Slightly too hard but acceptable
+            elif 6.5 <= peak_rpe < 7.0:
+                rpe_score = 65   # Too easy
+            elif 9.5 < peak_rpe <= 10:
                 rpe_score = 60   # Too hard
             else:
                 rpe_score = 40   # Way off
@@ -1221,26 +1398,42 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
             avg_rpe = session_data["rpe"].mean()
             total_volume = (session_data["weight"] * session_data["reps"]).sum()
             
-            # Determine the current session's performance verdict
+            # Get RPE values for this session
+            rpe_values = [rpe for rpe in session_data["rpe"].values if rpe and not pd.isna(rpe)]
+            peak_rpe = max(rpe_values) if rpe_values else None
+            final_rpe = rpe_values[-1] if rpe_values else None
+            
+            # Determine the current session's performance verdict using RPE-focused logic
             rep_range = REP_RANGE.get(exercise, None)
             
             if rep_range is None or rep_range[0] is None:
                 verdict = "❓ no target"
             else:
-                # Analyze the session performance
-                if avg_reps < rep_range[0]:
-                    verdict = "⬇️ too heavy"
-                elif avg_reps > rep_range[1]:
-                    verdict = "⬆️ too light"
-                else:
-                    # In range, check RPE for fine-tuning
-                    if avg_rpe and not pd.isna(avg_rpe):
-                        if avg_rpe < RPE_GUIDELINES["increase_threshold"]:
-                            verdict = "⬆️ too light (RPE)"
-                        elif avg_rpe > RPE_GUIDELINES["decrease_threshold"]:
-                            verdict = "⬇️ too heavy (RPE)"
+                # Prioritize RPE analysis
+                if peak_rpe and not pd.isna(peak_rpe):
+                    if peak_rpe >= 9.5:
+                        verdict = "⬇️ too heavy (RPE)"
+                    elif peak_rpe <= 7.0:
+                        verdict = "⬆️ too light (RPE)"
+                    elif final_rpe and final_rpe >= 9.0:
+                        # Final set at RPE 9+ means good progression to failure
+                        verdict = "✅ optimal"
+                    elif 7.5 <= peak_rpe <= 9.0:
+                        verdict = "✅ optimal"
+                    else:
+                        # Fall back to rep analysis with RPE context
+                        if avg_reps < rep_range[0]:
+                            verdict = "⬇️ too heavy"
+                        elif avg_reps > rep_range[1]:
+                            verdict = "⬆️ too light"
                         else:
-                            verdict = "✅ optimal"
+                            verdict = "✅ in range"
+                else:
+                    # No RPE data, use rep-based analysis
+                    if avg_reps < rep_range[0]:
+                        verdict = "⬇️ too heavy"
+                    elif avg_reps > rep_range[1]:
+                        verdict = "⬆️ too light"
                     else:
                         verdict = "✅ in range"
             
@@ -1250,6 +1443,8 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
                 "avg_weight": avg_weight,
                 "avg_reps": avg_reps,
                 "avg_rpe": avg_rpe,
+                "peak_rpe": peak_rpe,
+                "final_rpe": final_rpe,
                 "total_volume": total_volume,
                 "sets": len(session_data),
                 "verdict": verdict
@@ -1274,11 +1469,12 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
                 actual_action = "maintained"
             
             # What should have happened based on previous session's verdict
-            if previous["verdict"] == "⬇️ too heavy" or previous["verdict"] == "⬇️ too heavy (RPE)":
+            if previous["verdict"] in ["⬇️ too heavy", "⬇️ too heavy (RPE)"]:
                 optimal_action = "decrease"
-            elif previous["verdict"] == "⬆️ too light" or previous["verdict"] == "⬆️ too light (RPE)":
+            elif previous["verdict"] in ["⬆️ too light", "⬆️ too light (RPE)"]:
                 optimal_action = "increase"
-            elif previous["verdict"] == "✅ optimal" or previous["verdict"] == "✅ in range":
+            elif previous["verdict"] in ["✅ optimal", "✅ in range"]:
+                # If previous session was optimal/good, maintaining or small increase is fine
                 optimal_action = "maintain"
             else:  # "❓ no target"
                 optimal_action = "unknown"
@@ -1299,10 +1495,22 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
             if optimal_action == "unknown":
                 continue  # Skip if we can't determine optimal action
             
-            # Evaluate decision quality
-            if (optimal_action == "decrease" and actual_action == "decreased") or \
-               (optimal_action == "increase" and actual_action == "increased") or \
-               (optimal_action == "maintain" and actual_action in ["maintained", "increased"]):
+            # Evaluate decision quality - be more lenient with "maintain" decisions
+            decision_is_good = False
+            
+            if optimal_action == "decrease" and actual_action == "decreased":
+                decision_is_good = True
+            elif optimal_action == "increase" and actual_action == "increased":
+                decision_is_good = True
+            elif optimal_action == "maintain":
+                # For maintain, both maintaining and small increases are acceptable
+                if actual_action in ["maintained", "increased"]:
+                    decision_is_good = True
+                # Even small decreases might be OK if RPE was high
+                elif actual_action == "decreased" and previous.get("peak_rpe") and previous.get("peak_rpe") >= 9.0:
+                    decision_is_good = True
+            
+            if decision_is_good:
                 good_decisions.append({
                     "from_date": previous["date"],
                     "to_date": current["date"],
