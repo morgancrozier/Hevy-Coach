@@ -562,13 +562,14 @@ def print_comprehensive_report(df: pd.DataFrame):
         for exercise, data in sorted_evolution[:6]:  # Show top 6 exercises with most learning potential
             sessions = data["sessions"]
             efficiency = data["efficiency_score"]
+            absolute_latest_date = data["absolute_latest_date"]
             
             print(f"\n**{exercise}** (Decision Efficiency: {efficiency:.0f}%)")
             
             # Show session-by-session analysis
             session_strs = []
             for session in sessions[:4]:  # Show last 4 sessions
-                days_ago = (sessions[0]["date"] - session["date"]).days
+                days_ago = (absolute_latest_date - session["date"]).days
                 age_str = "today" if days_ago == 0 else f"{days_ago}d ago"
                 
                 # Color code the verdict
@@ -591,13 +592,13 @@ def print_comprehensive_report(df: pd.DataFrame):
             if data["missed_opportunities"]:
                 print(f"   ⚠️ **Missed Opportunities**:")
                 for miss in data["missed_opportunities"][:2]:  # Show top 2 missed opportunities
-                    days_ago = (sessions[0]["date"] - miss["to_date"]).days
+                    days_ago = (absolute_latest_date - miss["to_date"]).days
                     print(f"     • {days_ago}d ago: {miss['missed_opportunity']}")
             
             # Show good decisions  
             if data["good_decisions"]:
                 recent_good = [d for d in data["good_decisions"] if 
-                             (sessions[0]["date"] - d["to_date"]).days <= 7]
+                             (absolute_latest_date - d["to_date"]).days <= 7]
                 if recent_good:
                     print(f"   ✅ **Recent Good Decisions**: {len(recent_good)} optimal weight changes")
             
@@ -1196,6 +1197,9 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
     if len(df) == 0:
         return {}
     
+    # Get the absolute latest date across all exercises for reference
+    absolute_latest_date = df["date"].max()
+    
     evolution_data = {}
     
     for exercise in df["exercise"].unique():
@@ -1217,46 +1221,28 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
             avg_rpe = session_data["rpe"].mean()
             total_volume = (session_data["weight"] * session_data["reps"]).sum()
             
-            # Determine what the recommendation should have been for this session
+            # Determine the current session's performance verdict
             rep_range = REP_RANGE.get(exercise, None)
             
             if rep_range is None or rep_range[0] is None:
                 verdict = "❓ no target"
-                recommendation = "add rep target to rep_rules.py"
-                optimal_action = "unknown"
             else:
-                # Analyze if the weight was appropriate for this session
+                # Analyze the session performance
                 if avg_reps < rep_range[0]:
                     verdict = "⬇️ too heavy"
-                    optimal_weight = avg_weight * 0.9
-                    recommendation = f"should have used ~{optimal_weight:.1f}kg"
-                    optimal_action = "reduce"
                 elif avg_reps > rep_range[1]:
-                    verdict = "⬆️ too light" 
-                    optimal_weight = avg_weight * 1.05
-                    recommendation = f"should have used ~{optimal_weight:.1f}kg"
-                    optimal_action = "increase"
+                    verdict = "⬆️ too light"
                 else:
                     # In range, check RPE for fine-tuning
                     if avg_rpe and not pd.isna(avg_rpe):
                         if avg_rpe < RPE_GUIDELINES["increase_threshold"]:
                             verdict = "⬆️ too light (RPE)"
-                            optimal_weight = avg_weight * RPE_GUIDELINES["increase_factor"]
-                            recommendation = f"should have used ~{optimal_weight:.1f}kg (RPE {avg_rpe:.1f})"
-                            optimal_action = "increase"
                         elif avg_rpe > RPE_GUIDELINES["decrease_threshold"]:
                             verdict = "⬇️ too heavy (RPE)"
-                            optimal_weight = avg_weight * RPE_GUIDELINES["decrease_factor"]
-                            recommendation = f"should have used ~{optimal_weight:.1f}kg (RPE {avg_rpe:.1f})"
-                            optimal_action = "reduce"
                         else:
                             verdict = "✅ optimal"
-                            recommendation = "weight was perfect"
-                            optimal_action = "maintain"
                     else:
                         verdict = "✅ in range"
-                        recommendation = "weight was appropriate"
-                        optimal_action = "maintain"
             
             sessions_analysis.append({
                 "date": date,
@@ -1266,13 +1252,10 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
                 "avg_rpe": avg_rpe,
                 "total_volume": total_volume,
                 "sets": len(session_data),
-                "verdict": verdict,
-                "recommendation": recommendation,
-                "optimal_action": optimal_action
+                "verdict": verdict
             })
         
-        # Analyze what actually happened vs what should have happened
-        actual_changes = []
+        # Analyze decision quality: what actually happened vs what should have happened
         missed_opportunities = []
         good_decisions = []
         
@@ -1290,8 +1273,16 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
             else:
                 actual_action = "maintained"
             
-            # What should have happened based on previous session
-            optimal_action = previous["optimal_action"]
+            # What should have happened based on previous session's verdict
+            if previous["verdict"] == "⬇️ too heavy" or previous["verdict"] == "⬇️ too heavy (RPE)":
+                optimal_action = "decrease"
+            elif previous["verdict"] == "⬆️ too light" or previous["verdict"] == "⬆️ too light (RPE)":
+                optimal_action = "increase"
+            elif previous["verdict"] == "✅ optimal" or previous["verdict"] == "✅ in range":
+                optimal_action = "maintain"
+            else:  # "❓ no target"
+                optimal_action = "unknown"
+                continue  # Skip analysis if we don't have targets
             
             # Convert to past tense for display
             def to_past_tense(action):
@@ -1302,16 +1293,19 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
                 elif action == "decrease":
                     return "decreased"
                 else:
-                    return action + "d"
+                    return action
             
             # Compare actual vs optimal
-            days_between = (current["date"] - previous["date"]).days
+            if optimal_action == "unknown":
+                continue  # Skip if we can't determine optimal action
             
-            if optimal_action == actual_action or (optimal_action == "maintain" and actual_action in ["increased", "maintained"]):
+            # Evaluate decision quality
+            if (optimal_action == "decrease" and actual_action == "decreased") or \
+               (optimal_action == "increase" and actual_action == "increased") or \
+               (optimal_action == "maintain" and actual_action in ["maintained", "increased"]):
                 good_decisions.append({
                     "from_date": previous["date"],
                     "to_date": current["date"],
-                    "days_between": days_between,
                     "action": actual_action,
                     "weight_change": weight_change,
                     "verdict": "✅ good decision"
@@ -1320,7 +1314,6 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
                 missed_opportunities.append({
                     "from_date": previous["date"],
                     "to_date": current["date"],
-                    "days_between": days_between,
                     "should_have": optimal_action,
                     "actually_did": actual_action,
                     "weight_change": weight_change,
@@ -1336,7 +1329,8 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
             "good_decisions": good_decisions,
             "missed_opportunities": missed_opportunities,
             "efficiency_score": efficiency_score,
-            "total_decisions": total_decisions
+            "total_decisions": total_decisions,
+            "absolute_latest_date": absolute_latest_date  # Add reference date
         }
     
     return evolution_data
