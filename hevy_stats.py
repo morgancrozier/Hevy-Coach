@@ -512,6 +512,7 @@ def print_comprehensive_report(df: pd.DataFrame):
     periodization = detect_plateaus_and_periodization(progression_data)
     volume_recovery = get_volume_recovery_insights(df)
     exercise_evolution = analyze_exercise_evolution(df)
+    comprehensive_trends = get_comprehensive_trends(df)
     
     # ========================
     # 1. SESSION QUALITY SCORE
@@ -578,7 +579,118 @@ def print_comprehensive_report(df: pd.DataFrame):
                     print(f"   Overall: {overall_trend:+.1f}% over {len(sessions)} sessions")
     
     # ========================
-    # 3. HISTORICAL EXERCISE EVOLUTION
+    # 3. COMPREHENSIVE TRENDS & TRAJECTORIES
+    # ========================
+    print(f"\n\n📊 **COMPREHENSIVE TRENDS & TRAJECTORIES**")
+    print("-" * 50)
+    
+    if comprehensive_trends:
+        print(f"🎯 **Overall Fitness Trajectory**: {comprehensive_trends['fitness_trajectory']}")
+        print(f"📝 **Assessment**: {comprehensive_trends['trajectory_desc']}")
+        print(f"📈 **Average Progression Rate**: {comprehensive_trends['avg_progression_rate']:+.1f}kg/week across all exercises")
+        print(f"🏃 **Training Frequency**: {comprehensive_trends['training_frequency']:.1f} sessions/week over {comprehensive_trends['total_days']} days")
+        
+        # Weekly volume trends
+        if len(comprehensive_trends["weekly_stats"]) >= 2:
+            print(f"\n📊 **Weekly Volume Analysis**:")
+            weekly_stats = comprehensive_trends["weekly_stats"]
+            
+            print(f"   Volume Trend: {comprehensive_trends['volume_trend'].title()}")
+            if comprehensive_trends['volume_velocity'] != 0:
+                print(f"   Volume Velocity: {comprehensive_trends['volume_velocity']:+.0f}kg/week")
+            
+            # Show last 3 weeks
+            recent_weeks = weekly_stats.tail(3)
+            for i, (_, week) in enumerate(recent_weeks.iterrows()):
+                week_age = len(recent_weeks) - i - 1
+                age_str = "this week" if week_age == 0 else f"{week_age} week{'s' if week_age > 1 else ''} ago"
+                print(f"   • {age_str}: {week['total_volume']:,.0f}kg total ({week['unique_exercises']:.0f} exercises)")
+        
+        # Exercise-specific strength trends
+        if comprehensive_trends["exercise_trends"]:
+            print(f"\n💪 **Strength Progression by Exercise** (per week rates):")
+            
+            # Sort by progression rate (best performers first)
+            sorted_trends = sorted(comprehensive_trends["exercise_trends"].items(), 
+                                 key=lambda x: x[1]["weekly_progression_rate"], reverse=True)
+            
+            for exercise, trend_data in sorted_trends[:8]:  # Show top 8
+                rate = trend_data["weekly_progression_rate"]
+                total_change = trend_data["progression_pct"]
+                status = trend_data["trend_status"]
+                days = trend_data["days_span"]
+                
+                print(f"\n   **{exercise}**: {status}")
+                print(f"      Rate: {rate:+.1f}kg/week | Total: {total_change:+.1f}% over {days} days")
+                print(f"      Weight: {trend_data['starting_weight']:.1f}kg → {trend_data['current_weight']:.1f}kg")
+                
+                # Show recent session progression
+                recent_sessions = trend_data["recent_sessions"]
+                if len(recent_sessions) >= 2:
+                    session_weights = [f"{row['weight']:.1f}kg" for _, row in recent_sessions.iterrows()]
+                    print(f"      Recent: {' → '.join(session_weights)}")
+        
+        # Peak performance analysis
+        if comprehensive_trends["exercise_peaks"]:
+            print(f"\n🏆 **Peak Performance Analysis**:")
+            
+            # Group by peak status
+            peak_groups = {}
+            for exercise, peak_data in comprehensive_trends["exercise_peaks"].items():
+                status = peak_data["peak_status"]
+                if status not in peak_groups:
+                    peak_groups[status] = []
+                peak_groups[status].append((exercise, peak_data))
+            
+            # Display each group
+            for status in ["🏆 At Peak", "🎯 Near Peak", "📊 Below Peak", "⚠️ Far from Peak"]:
+                if status in peak_groups:
+                    exercises = peak_groups[status]
+                    print(f"\n   **{status}** ({len(exercises)} exercises):")
+                    
+                    for exercise, peak_data in exercises[:5]:  # Show top 5 per group
+                        gap = peak_data["peak_gap"]
+                        gap_pct = peak_data["peak_gap_pct"]
+                        if gap > 0:
+                            print(f"      • **{exercise}**: {gap:.1f}kg below peak ({gap_pct:.1f}% gap)")
+                        else:
+                            print(f"      • **{exercise}**: at all-time peak!")
+        
+        # Training insights based on trends
+        print(f"\n💡 **Trend-Based Insights**:")
+        
+        avg_rate = comprehensive_trends['avg_progression_rate']
+        if avg_rate > 0.3:
+            print("   • 🚀 Excellent progression rate - current program is highly effective!")
+            print("   • 🎯 Focus: Maintain consistency, monitor for overreaching")
+        elif avg_rate > 0.1:
+            print("   • 📈 Good steady progress - sustainable progression pattern")
+            print("   • 🎯 Focus: Continue current approach, consider small increases in volume")
+        elif avg_rate > -0.1:
+            print("   • 🔄 Maintenance phase - strength is stable")
+            print("   • 🎯 Focus: Add progressive overload or consider program variation")
+        else:
+            print("   • ⚠️ Declining trend detected across multiple exercises")
+            print("   • 🎯 Focus: Review recovery, consider deload week, check nutrition")
+        
+        volume_trend = comprehensive_trends['volume_trend']
+        if "increasing" in volume_trend:
+            print("   • 📊 Volume trending upward - monitor recovery closely")
+        elif "declining" in volume_trend:
+            print("   • 📊 Volume declining - may need motivation boost or program refresh")
+        
+        frequency = comprehensive_trends['training_frequency']
+        if frequency >= 4:
+            print("   • 🏃 High training frequency - excellent consistency!")
+        elif frequency >= 3:
+            print("   • 🏃 Good training frequency - sustainable routine")
+        elif frequency >= 2:
+            print("   • 🏃 Moderate frequency - consider adding 1 more session/week")
+        else:
+            print("   • 🏃 Low frequency - aim for 3+ sessions/week for better results")
+    
+    # ========================
+    # 4. HISTORICAL EXERCISE EVOLUTION
     # ========================
     print(f"\n\n🔍 **HISTORICAL EXERCISE EVOLUTION ANALYSIS**")
     print("-" * 50)
@@ -796,7 +908,7 @@ def print_comprehensive_report(df: pd.DataFrame):
         print(f"• **Final set RPE 9+**: Excellent progression to failure - ideal training")
     
     # ========================
-    # 4. PERIODIZATION & PLATEAU DETECTION
+    # 5. PERIODIZATION & PLATEAU DETECTION
     # ========================
     print(f"\n\n🎯 **TRAINING PERIODIZATION INSIGHTS**")
     print("-" * 50)
@@ -827,7 +939,7 @@ def print_comprehensive_report(df: pd.DataFrame):
                 print(f"• **{ex['name']}**: {ex['decline_pct']:.1f}% decline - check form/recovery")
     
     # ========================
-    # 5. VOLUME & RECOVERY ANALYSIS
+    # 6. VOLUME & RECOVERY ANALYSIS
     # ========================
     print(f"\n\n💪 **VOLUME & RECOVERY INSIGHTS**")
     print("-" * 50)
@@ -845,10 +957,10 @@ def print_comprehensive_report(df: pd.DataFrame):
             print(f"\n🎯 **Volume by Muscle Group**:")
             sorted_muscles = sorted(volume_recovery["muscle_volume"].items(), key=lambda x: x[1], reverse=True)
             for muscle, volume in sorted_muscles:
-                print(f"• **{muscle.title()}**: {volume:.0f}kg total volume")
+                print(f"• **{muscle.title()}**: {volume:,.0f}kg total volume")
     
     # ========================
-    # 6. PAST 30 DAYS OVERVIEW (CONDENSED)
+    # 7. PAST 30 DAYS OVERVIEW (CONDENSED)
     # ========================
     print("\n📊 **30-DAY OVERVIEW & TRENDS**")
     print("-" * 50)
@@ -867,10 +979,10 @@ def print_comprehensive_report(df: pd.DataFrame):
         print(f"\n🏋️ **Highest Volume Exercises**:")
         for exercise in overview["top_by_volume"].index[:3]:
             row = overview["top_by_volume"].loc[exercise]
-            print(f"• **{exercise}**: {row['total_volume']:.0f}kg total")
+            print(f"• **{exercise}**: {row['total_volume']:,.0f}kg total")
     
     # ========================
-    # 7. LAST SESSION DEEP DIVE
+    # 8. LAST SESSION DEEP DIVE
     # ========================
     print(f"\n\n🎯 **LAST SESSION DEEP DIVE**")
     print("-" * 50)
@@ -909,7 +1021,7 @@ def print_comprehensive_report(df: pd.DataFrame):
                     rpe_info += f" (final: {ex['final_rpe']:.1f})"
                 print(f"   {rpe_info}")
             
-            print(f"   Volume: {ex['total_volume']:.0f}kg")
+            print(f"   Volume: {ex['total_volume']:,.0f}kg")
             print(f"   **{ex['verdict']}** → {ex['suggestion']}")
         
         # Session summary
@@ -921,7 +1033,7 @@ def print_comprehensive_report(df: pd.DataFrame):
         session_score = (in_range / len(last_session["exercises"])) * 100 if last_session["exercises"] else 0
     
     # ========================
-    # 8. NEXT SESSION RECOMMENDATIONS
+    # 9. NEXT SESSION RECOMMENDATIONS
     # ========================
     print(f"\n\n💡 **NEXT SESSION RECOMMENDATIONS**")
     print("-" * 50)
@@ -1542,6 +1654,178 @@ def analyze_exercise_evolution(df: pd.DataFrame) -> Dict:
         }
     
     return evolution_data
+
+def get_comprehensive_trends(df: pd.DataFrame) -> Dict:
+    """
+    Analyze comprehensive trends including volume, strength progression, and performance trajectories.
+    
+    Args:
+        df: DataFrame with workout data
+    
+    Returns:
+        Dictionary with trend analysis data
+    """
+    if len(df) == 0:
+        return {}
+    
+    df_copy = df.copy()
+    df_copy["date"] = pd.to_datetime(df_copy["date"])
+    df_copy["volume"] = df_copy["weight"] * df_copy["reps"]
+    df_copy["week"] = df_copy["date"].dt.isocalendar().week
+    df_copy["day_number"] = (df_copy["date"] - df_copy["date"].min()).dt.days
+    
+    # Weekly volume analysis
+    weekly_stats = df_copy.groupby("week").agg({
+        "date": "max",
+        "volume": "sum",
+        "weight": "mean", 
+        "reps": "sum",
+        "exercise": "nunique"
+    }).round(1)
+    weekly_stats.columns = ["week_end", "total_volume", "avg_weight", "total_reps", "unique_exercises"]
+    
+    # Volume trend analysis
+    volume_trend = "stable"
+    volume_velocity = 0
+    
+    if len(weekly_stats) >= 3:
+        # Calculate volume trend over last 3 weeks
+        recent_weeks = weekly_stats.iloc[-3:]
+        week_numbers = list(range(len(recent_weeks)))
+        volumes = recent_weeks["total_volume"].values
+        
+        # Linear regression for trend
+        if len(week_numbers) > 1:
+            slope = (volumes[-1] - volumes[0]) / (week_numbers[-1] - week_numbers[0]) if week_numbers[-1] != week_numbers[0] else 0
+            volume_velocity = slope  # kg per week
+            
+            if slope > 500:
+                volume_trend = "rapidly increasing"
+            elif slope > 200:
+                volume_trend = "steadily increasing"
+            elif slope > -200:
+                volume_trend = "stable"
+            elif slope > -500:
+                volume_trend = "declining"
+            else:
+                volume_trend = "rapidly declining"
+    
+    # Exercise-specific strength trends
+    exercise_trends = {}
+    
+    for exercise in df_copy["exercise"].unique():
+        exercise_df = df_copy[df_copy["exercise"] == exercise].copy()
+        
+        # Get session averages for this exercise
+        session_stats = exercise_df.groupby("date").agg({
+            "weight": "mean",
+            "reps": "mean", 
+            "volume": "sum"
+        }).reset_index().sort_values("date")
+        
+        if len(session_stats) >= 3:
+            # Calculate strength progression rate (weight increase per week)
+            days_span = (session_stats["date"].max() - session_stats["date"].min()).days
+            weight_change = session_stats["weight"].iloc[-1] - session_stats["weight"].iloc[0]
+            
+            if days_span > 0:
+                weekly_progression_rate = (weight_change / days_span) * 7  # kg per week
+                progression_pct = (weight_change / session_stats["weight"].iloc[0]) * 100 if session_stats["weight"].iloc[0] > 0 else 0
+                
+                # Determine trend direction
+                if weekly_progression_rate > 0.5:
+                    trend_status = "💪 Strong Growth"
+                elif weekly_progression_rate > 0.1:
+                    trend_status = "📈 Steady Progress"
+                elif weekly_progression_rate > -0.1:
+                    trend_status = "➡️ Maintaining"
+                elif weekly_progression_rate > -0.5:
+                    trend_status = "📉 Slight Decline"
+                else:
+                    trend_status = "⚠️ Significant Decline"
+                
+                exercise_trends[exercise] = {
+                    "sessions": len(session_stats),
+                    "days_span": days_span,
+                    "weight_change": weight_change,
+                    "weekly_progression_rate": weekly_progression_rate,
+                    "progression_pct": progression_pct,
+                    "trend_status": trend_status,
+                    "current_weight": session_stats["weight"].iloc[-1],
+                    "starting_weight": session_stats["weight"].iloc[0],
+                    "peak_weight": session_stats["weight"].max(),
+                    "recent_sessions": session_stats.tail(3)  # Last 3 sessions for display
+                }
+    
+    # Overall fitness trajectory
+    total_sessions = df_copy["date"].nunique()
+    total_days = (df_copy["date"].max() - df_copy["date"].min()).days + 1
+    training_frequency = total_sessions / (total_days / 7) if total_days > 0 else 0  # sessions per week
+    
+    # Calculate overall strength index (average of all exercise progressions)
+    if exercise_trends:
+        progression_rates = [data["weekly_progression_rate"] for data in exercise_trends.values()]
+        avg_progression_rate = sum(progression_rates) / len(progression_rates)
+        
+        # Overall fitness trajectory assessment
+        if avg_progression_rate > 0.3:
+            fitness_trajectory = "🚀 Excellent Progress"
+            trajectory_desc = "Strong upward trend across multiple exercises"
+        elif avg_progression_rate > 0.1:
+            fitness_trajectory = "📈 Good Progress"
+            trajectory_desc = "Steady improvements in most exercises"
+        elif avg_progression_rate > -0.1:
+            fitness_trajectory = "🔄 Maintenance Phase"
+            trajectory_desc = "Stable performance, consider progressive overload"
+        else:
+            fitness_trajectory = "📉 Declining Phase"
+            trajectory_desc = "Consider deload, recovery focus, or program change"
+    else:
+        avg_progression_rate = 0
+        fitness_trajectory = "📊 Insufficient Data"
+        trajectory_desc = "Need more sessions for trend analysis"
+    
+    # Peak performance analysis
+    exercise_peaks = {}
+    for exercise, data in exercise_trends.items():
+        recent_sessions = data["recent_sessions"]
+        peak_weight = data["peak_weight"]
+        current_weight = data["current_weight"]
+        
+        # Distance from peak
+        peak_gap = peak_weight - current_weight
+        peak_gap_pct = (peak_gap / peak_weight) * 100 if peak_weight > 0 else 0
+        
+        if peak_gap_pct <= 2:
+            peak_status = "🏆 At Peak"
+        elif peak_gap_pct <= 5:
+            peak_status = "🎯 Near Peak"
+        elif peak_gap_pct <= 10:
+            peak_status = "📊 Below Peak"
+        else:
+            peak_status = "⚠️ Far from Peak"
+        
+        exercise_peaks[exercise] = {
+            "peak_weight": peak_weight,
+            "current_weight": current_weight,
+            "peak_gap": peak_gap,
+            "peak_gap_pct": peak_gap_pct,
+            "peak_status": peak_status
+        }
+    
+    return {
+        "weekly_stats": weekly_stats,
+        "volume_trend": volume_trend,
+        "volume_velocity": volume_velocity,
+        "exercise_trends": exercise_trends,
+        "fitness_trajectory": fitness_trajectory,
+        "trajectory_desc": trajectory_desc,
+        "avg_progression_rate": avg_progression_rate,
+        "training_frequency": training_frequency,
+        "total_sessions": total_sessions,
+        "total_days": total_days,
+        "exercise_peaks": exercise_peaks
+    }
 
 def main():
     parser = argparse.ArgumentParser(description="Hevy Stats Fetcher & Coach Analysis")
