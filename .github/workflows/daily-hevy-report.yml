@@ -2,9 +2,9 @@ name: 🏋️‍♂️ Daily Hevy Coaching Report
 
 on:
   schedule:
-    # Run every day at 8:00 AM UTC (adjust timezone as needed)
-    # This is 3:00 AM EST / 12:00 AM PST - adjust for your timezone
-    - cron: '0 8 * * *'
+    # Run every day at 6:00 PM Thailand time (11:00 AM UTC)
+    # Thailand is GMT+7, so 18:00 ICT = 11:00 UTC
+    - cron: '0 11 * * *'
   
   # Allow manual triggering from GitHub UI
   workflow_dispatch:
