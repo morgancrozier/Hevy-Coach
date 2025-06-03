@@ -1,16 +1,20 @@
-name: 🏋️‍♂️ Daily Hevy Coaching Report
+name: 🏋️‍♂️ Smart Hevy Workout Reports
 
 on:
   schedule:
-    # Run every day at 6:00 PM Thailand time (11:00 AM UTC)
-    # Thailand is GMT+7, so 18:00 ICT = 11:00 UTC
-    - cron: '0 11 * * *'
+    # Check every 30 minutes during workout window (4pm-6pm Thailand = 9am-11am UTC)
+    - cron: '0 9 * * *'      # 4:00pm Thailand
+    - cron: '30 9 * * *'     # 4:30pm Thailand  
+    - cron: '0 10 * * *'     # 5:00pm Thailand
+    - cron: '30 10 * * *'    # 5:30pm Thailand
+    - cron: '0 11 * * *'     # 6:00pm Thailand
+    - cron: '30 11 * * *'    # 6:30pm Thailand (catch late workouts)
   
   # Allow manual triggering from GitHub UI
   workflow_dispatch:
 
 jobs:
-  generate-report:
+  check-and-report:
     runs-on: ubuntu-latest
     
     steps:
@@ -27,7 +31,104 @@ jobs:
         python -m pip install --upgrade pip
         pip install requests pandas tabulate python-dotenv
     
+    - name: 🔍 Check for New Workouts
+      id: check_workouts
+      env:
+        HEVY_API_KEY: ${{ secrets.HEVY_API_KEY }}
+      run: |
+        echo "🔍 Checking for new workouts since last report..."
+        
+        # Run the new workout detection script
+        python -c "
+        import os
+        import sys
+        import json
+        import requests
+        from datetime import datetime, timedelta
+        
+        # Get API key
+        api_key = os.getenv('HEVY_API_KEY')
+        if not api_key:
+            print('❌ No API key found')
+            sys.exit(1)
+        
+        # Check for state file from previous runs
+        state_file = 'last_processed_state.json'
+        last_processed = None
+        
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, 'r') as f:
+                    state = json.load(f)
+                    last_processed = state.get('last_processed_workout')
+                    print(f'📅 Last processed: {last_processed}')
+            except:
+                print('⚠️ Could not read state file, treating as first run')
+        
+        # Fetch recent workouts
+        headers = {'api-key': api_key, 'Content-Type': 'application/json'}
+        since_date = datetime.now() - timedelta(days=1)  # Check last 24 hours
+        since = since_date.isoformat() + 'Z'
+        
+        try:
+            response = requests.get(
+                f'https://api.hevyapp.com/v1/workouts/events',
+                headers=headers,
+                params={'page': 1, 'pageSize': 10, 'since': since}
+            )
+            response.raise_for_status()
+            data = response.json()
+            events = data.get('events', [])
+            
+            # Find the most recent workout
+            latest_workout = None
+            for event in events:
+                if event.get('type') == 'updated':
+                    workout = event.get('workout', {})
+                    start_time = workout.get('start_time')
+                    if start_time:
+                        if latest_workout is None or start_time > latest_workout:
+                            latest_workout = start_time
+            
+            if latest_workout:
+                print(f'🏋️ Latest workout found: {latest_workout}')
+                
+                # Check if this is newer than last processed
+                if last_processed is None or latest_workout > last_processed:
+                    print('🎉 NEW WORKOUT DETECTED! Generating report...')
+                    
+                    # Save new state
+                    new_state = {
+                        'last_processed_workout': latest_workout,
+                        'last_check': datetime.now().isoformat() + 'Z',
+                        'reports_generated': state.get('reports_generated', 0) + 1 if os.path.exists(state_file) else 1
+                    }
+                    
+                    with open(state_file, 'w') as f:
+                        json.dump(new_state, f, indent=2)
+                    
+                    # Set output for next step
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                        f.write('generate_report=true\n')
+                        f.write(f'latest_workout={latest_workout}\n')
+                else:
+                    print('✅ No new workouts since last report')
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                        f.write('generate_report=false\n')
+            else:
+                print('📭 No recent workouts found')
+                with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                    f.write('generate_report=false\n')
+                    
+        except Exception as e:
+            print(f'❌ Error checking workouts: {e}')
+            # Generate report anyway on error to be safe
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                f.write('generate_report=true\n')
+        "
+    
     - name: 🏋️‍♂️ Generate Hevy Report
+      if: steps.check_workouts.outputs.generate_report == 'true'
       env:
         HEVY_API_KEY: ${{ secrets.HEVY_API_KEY }}
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
@@ -36,27 +137,56 @@ jobs:
         SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
         SMTP_PORT: ${{ secrets.SMTP_PORT }}
       run: |
-        echo "🚀 Starting Hevy analysis..."
+        echo "🚀 NEW WORKOUT DETECTED! Generating coaching report..."
+        if [ -n "${{ steps.check_workouts.outputs.latest_workout }}" ]; then
+          echo "📅 Latest workout: ${{ steps.check_workouts.outputs.latest_workout }}"
+        fi
+        
         python hevy_stats.py both --email
         echo "✅ Report generation completed!"
     
     - name: 📁 Upload report artifacts
+      if: steps.check_workouts.outputs.generate_report == 'true'
       uses: actions/upload-artifact@v4
-      if: always()  # Upload even if email fails
       with:
         name: hevy-reports-${{ github.run_number }}
         path: |
           hevy_coaching_report_*.md
           hevy_workouts_export_*.csv
-          hevy_automation.log
+          last_processed_state.json
         retention-days: 30
+    
+    - name: 💾 Commit state file
+      if: steps.check_workouts.outputs.generate_report == 'true'
+      run: |
+        # Configure git
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add and commit state file if it exists and has changes
+        if [ -f "last_processed_state.json" ]; then
+          git add last_processed_state.json
+          if ! git diff --staged --quiet; then
+            git commit -m "🤖 Update last processed workout state [skip ci]"
+            git push
+            echo "💾 State file updated in repository"
+          else
+            echo "📝 State file unchanged"
+          fi
+        fi
     
     - name: 📊 Report Status
       if: always()
       run: |
-        echo "📋 Workflow completed!"
-        echo "📧 Check your email for the coaching report"
-        echo "📁 Report files are also available in workflow artifacts"
+        if [ "${{ steps.check_workouts.outputs.generate_report }}" == "true" ]; then
+          echo "🎉 NEW WORKOUT REPORT GENERATED!"
+          echo "📧 Check your email for the coaching report"
+          echo "📁 Report files are available in workflow artifacts"
+          echo "💪 Keep up the great work!"
+        else
+          echo "✅ No new workouts detected - no report needed"
+          echo "🔄 Will check again in 30 minutes during workout window"
+        fi
         
-        # Show a summary of what was generated
-        ls -la *.md *.csv 2>/dev/null || echo "No report files found" 
+        # Show any generated files
+        ls -la *.md *.csv *.json 2>/dev/null || echo "No new files generated" 
