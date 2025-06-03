@@ -18,6 +18,9 @@
   - ✅ Successfully tested: correctly identified "Day 2 - Lower (Hamstring)" as next workout
   - ✅ Working exercise recommendations: Leg Press +2.5kg, Standing Leg Curls -2.5kg, etc.
   - ✅ **Documentation Updated**: README.md and comprehensive docs/CYCLICAL-ROUTINES.md created
+  - ✅ **Made Completely Optional**: No hardcoded routines - uses configurable `routine_config.py`
+  - ✅ **Configurable Routine Support**: Users can define any cycle (3-day, 4-day, 5-day, etc.)
+  - ✅ **Graceful Degradation**: Skips feature entirely if no config file, works as before
 
 ## 🔲 Pending Tasks
 

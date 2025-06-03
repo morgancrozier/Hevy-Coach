@@ -39,57 +39,37 @@ RPE_GUIDELINES = {
 # Import routine configuration
 try:
     from routine_config import CYCLE_PATTERN, ROUTINE_TITLE_MAPPING, EXERCISE_PATTERNS
+    ROUTINE_CONFIG_AVAILABLE = True
 except ImportError:
-    print("⚠️ Warning: routine_config.py not found. Using default 6-day cycle.")
-    print("💡 Copy routine_config.example.py to routine_config.py and customize for your routine.")
-    
-    # Default 6-day cycle as fallback
-    CYCLE_PATTERN = [
-        "Day 1 - Upper (Push) 💪",
-        "Day 2 - Lower (Hamstring) 🦵", 
-        "Day 3 - Rest / Treadmill",
-        "Day 4 - Upper (Pull) 💪",
-        "Day 5 - Lower (Quad) 🦵",
-        "Day 6 - Rest"
-    ]
-    
-    ROUTINE_TITLE_MAPPING = {
-        "Day 1 - Upper (Push) 💪": 0,
-        "Day 2 - Lower (Hamstring) 🦵": 1,
-        "Day 3 - Upper (Pull) 💪": 3,
-        "Day 4 - Lower (Quad) 🦵": 4
-    }
-    
-    EXERCISE_PATTERNS = {
-        "upper_push": {
-            "keywords": ["chest", "press", "shoulder", "dip", "tricep", "push"],
-            "next_cycle_day": 1
-        },
-        "lower_hamstring": {
-            "keywords": ["curl", "deadlift", "hamstring", "hip", "glute", "rdl", "sldl"],
-            "next_cycle_day": 2
-        },
-        "upper_pull": {
-            "keywords": ["lat", "pull", "row", "bicep", "chin", "pulldown"],
-            "next_cycle_day": 4
-        },
-        "lower_quad": {
-            "keywords": ["quad", "extension", "squat", "leg press", "lunge", "front squat"],
-            "next_cycle_day": 5
-        }
-    }
+    # No routine configuration - skip cyclical routine tracking
+    CYCLE_PATTERN = None
+    ROUTINE_TITLE_MAPPING = None
+    EXERCISE_PATTERNS = None
+    ROUTINE_CONFIG_AVAILABLE = False
 
 class WorkoutCycle:
     """Manages cyclical workout routines and determines next workout day."""
     
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.cycle_pattern = CYCLE_PATTERN
         
-        # Map routine titles to cycle days
-        self.routine_title_mapping = ROUTINE_TITLE_MAPPING
+        # Check if routine configuration is available
+        if not ROUTINE_CONFIG_AVAILABLE:
+            self.cycle_pattern = None
+            self.routine_title_mapping = None
+            self.exercise_patterns = None
+            self.config_available = False
+        else:
+            self.cycle_pattern = CYCLE_PATTERN
+            self.routine_title_mapping = ROUTINE_TITLE_MAPPING
+            self.exercise_patterns = EXERCISE_PATTERNS
+            self.config_available = True
         
         self.client = None
+    
+    def is_available(self) -> bool:
+        """Check if cyclical routine tracking is available."""
+        return self.config_available
     
     def _get_client(self):
         """Lazy initialization of Hevy client."""
@@ -118,6 +98,9 @@ class WorkoutCycle:
     
     def determine_current_cycle_day(self, df: pd.DataFrame) -> int:
         """Determine which day of the cycle the user is currently on based on recent workouts."""
+        if not self.config_available:
+            return 0  # No configuration available
+            
         if len(df) == 0:
             return 0  # Default to Day 1
         
@@ -139,7 +122,7 @@ class WorkoutCycle:
         # Use configurable exercise patterns instead of hardcoded heuristics
         exercise_str = ' '.join(exercises).lower()
         
-        for pattern_name, pattern_config in EXERCISE_PATTERNS.items():
+        for pattern_name, pattern_config in self.exercise_patterns.items():
             keywords = pattern_config["keywords"]
             next_cycle_day = pattern_config["next_cycle_day"]
             
@@ -151,6 +134,9 @@ class WorkoutCycle:
     
     def get_next_workout_info(self, df: pd.DataFrame) -> Dict:
         """Get information about the next workout in the cycle."""
+        if not self.config_available:
+            return {"error": "No routine configuration available"}
+            
         current_day_idx = self.determine_current_cycle_day(df)
         next_workout = self.cycle_pattern[current_day_idx]
         
@@ -1928,75 +1914,88 @@ def print_comprehensive_report(df: pd.DataFrame):
     # NEW: CYCLICAL ROUTINE TRACKING & NEXT WORKOUT RECOMMENDATIONS
     # ========================
     api_key = os.getenv("HEVY_API_KEY")
-    if api_key:
+    if api_key and ROUTINE_CONFIG_AVAILABLE:
         try:
             workout_cycle = WorkoutCycle(api_key)
-            next_workout_info = workout_cycle.get_next_workout_info(df)
-            cycle_recommendations = workout_cycle.get_routine_specific_recommendations(df, next_workout_info)
-            
-            print(f"\n\n🔄 **CYCLICAL ROUTINE TRACKING**")
-            print("-" * 50)
-            
-            print(f"📅 **Next Scheduled Workout**: {next_workout_info['workout_name']}")
-            
-            if next_workout_info["is_rest_day"]:
-                print("🛌 **Rest Day Recommendations**:")
-                for rec in cycle_recommendations["recommendations"]:
-                    print(f"   {rec}")
-            else:
-                print(f"⏰ **Cycle Info**: This workout repeats every {next_workout_info['days_until_same_workout']} days")
+            if workout_cycle.is_available():
+                next_workout_info = workout_cycle.get_next_workout_info(df)
                 
-                if cycle_recommendations["type"] == "workout_specific":
-                    exercise_recs = cycle_recommendations["exercise_recommendations"]
+                # Check if we got valid workout info (not an error)
+                if "error" not in next_workout_info:
+                    cycle_recommendations = workout_cycle.get_routine_specific_recommendations(df, next_workout_info)
                     
-                    if exercise_recs:
-                        print(f"\n🎯 **Exercise-Specific Recommendations for {next_workout_info['workout_name']}**:")
+                    print(f"\n\n🔄 **CYCLICAL ROUTINE TRACKING**")
+                    print("-" * 50)
+                    
+                    print(f"📅 **Next Scheduled Workout**: {next_workout_info['workout_name']}")
+                    
+                    if next_workout_info["is_rest_day"]:
+                        print("🛌 **Rest Day Recommendations**:")
+                        for rec in cycle_recommendations["recommendations"]:
+                            print(f"   {rec}")
+                    else:
+                        print(f"⏰ **Cycle Info**: This workout repeats every {next_workout_info['days_until_same_workout']} days")
                         
-                        # Group recommendations by action type
-                        increases = []
-                        decreases = []
-                        maintains = []
-                        
-                        for exercise, rec in exercise_recs.items():
-                            action = rec["action"]
-                            current_weight = rec["current_weight"]
-                            suggested_weight = rec["suggested_weight"]
-                            reasoning = rec["reasoning"]
+                        if cycle_recommendations["type"] == "workout_specific":
+                            exercise_recs = cycle_recommendations["exercise_recommendations"]
                             
-                            if action == "increase":
-                                increases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
-                            elif action == "decrease":
-                                decreases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
-                            else:
-                                maintains.append(f"• **{exercise}**: Keep {current_weight:.1f}kg ({reasoning})")
-                        
-                        if increases:
-                            print("\n📈 **Suggested Increases**:")
-                            for inc in increases:
-                                print(f"   {inc}")
-                        
-                        if decreases:
-                            print("\n📉 **Suggested Decreases**:")
-                            for dec in decreases:
-                                print(f"   {dec}")
-                        
-                        if maintains:
-                            print("\n✅ **Maintain Current Weights**:")
-                            for maint in maintains[:5]:  # Show top 5
-                                print(f"   {maint}")
-                    
-                    print(f"\n💡 **General Recommendations**:")
-                    for rec in cycle_recommendations["general_recommendations"]:
-                        print(f"   • {rec}")
-                else:
-                    print("ℹ️ No specific routine data available - using general recommendations")
+                            if exercise_recs:
+                                print(f"\n🎯 **Exercise-Specific Recommendations for {next_workout_info['workout_name']}**:")
+                                
+                                # Group recommendations by action type
+                                increases = []
+                                decreases = []
+                                maintains = []
+                                
+                                for exercise, rec in exercise_recs.items():
+                                    action = rec["action"]
+                                    current_weight = rec["current_weight"]
+                                    suggested_weight = rec["suggested_weight"]
+                                    reasoning = rec["reasoning"]
+                                    
+                                    if action == "increase":
+                                        increases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
+                                    elif action == "decrease":
+                                        decreases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
+                                    else:
+                                        maintains.append(f"• **{exercise}**: Keep {current_weight:.1f}kg ({reasoning})")
+                                
+                                if increases:
+                                    print("\n📈 **Suggested Increases**:")
+                                    for inc in increases:
+                                        print(f"   {inc}")
+                                
+                                if decreases:
+                                    print("\n📉 **Suggested Decreases**:")
+                                    for dec in decreases:
+                                        print(f"   {dec}")
+                                
+                                if maintains:
+                                    print("\n✅ **Maintain Current Weights**:")
+                                    for maint in maintains[:5]:  # Show top 5
+                                        print(f"   {maint}")
+                            
+                            print(f"\n💡 **General Recommendations**:")
+                            for rec in cycle_recommendations["general_recommendations"]:
+                                print(f"   • {rec}")
+                        else:
+                            print("ℹ️ No specific routine data available - using general recommendations")
             
         except Exception as e:
             print(f"\n⚠️ **Cyclical Routine Tracking**: Could not analyze workout cycle ({str(e)})")
-            print("💡 This feature requires your routine data to be accessible via the Hevy API")
-    else:
-        print(f"\n⚠️ **Cyclical Routine Tracking**: Disabled (no API key found)")
-        print("💡 Set HEVY_API_KEY environment variable to enable next workout recommendations")
+            print("💡 This feature requires routine_config.py and accessible Hevy API data")
+    elif api_key and not ROUTINE_CONFIG_AVAILABLE:
+        # API key available but no routine config - provide setup instructions
+        print(f"\n💡 **Cyclical Routine Tracking Available**")
+        print("-" * 50)
+        print("🔧 **Setup Instructions**:")
+        print("   1. Copy: `cp routine_config.example.py routine_config.py`")
+        print("   2. Edit routine_config.py with your workout cycle")
+        print("   3. Run analysis again to get next workout recommendations")
+        print("   📖 See docs/CYCLICAL-ROUTINES.md for detailed setup guide")
+    elif not api_key:
+        # No API key - skip entirely (no mention of cyclical routines)
+        pass  # Skip the section completely
     
     print("\n" + "="*80)
 

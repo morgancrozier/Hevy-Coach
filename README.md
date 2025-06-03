@@ -21,6 +21,8 @@
 - Provides recommendations for your NEXT upcoming workout
 - Exercise-specific weight adjustments based on RPE history
 - Fetches your actual routine templates from Hevy for detailed guidance
+- **Completely Optional**: Only activates if you configure it
+- **Fully Configurable**: Support any cycle length (3, 4, 5, 6+ days)
 
 📧 **Automated Daily Reports**
 - Full coaching reports emailed to you daily
@@ -90,28 +92,30 @@ python3 hevy_stats.py both --email
 - **Next Workout Predictions**: Instead of analyzing today's completed workout, predicts what you should do in your next session
 - **Routine Template Integration**: Fetches your saved routines from Hevy to provide specific exercise recommendations
 - **RPE-Based Weight Adjustments**: Uses your historical RPE data to suggest precise weight changes for each exercise
+- **Fully Configurable**: Support any workout split (Push/Pull/Legs, Upper/Lower, Bro Split, Full Body, etc.)
+- **Completely Optional**: Only activates when you create a `routine_config.py` file
 
 **How It Works:**
-1. **Cycle Pattern Recognition**: The system knows your workout pattern (currently supports 6-day cycles)
-2. **Hevy API Integration**: Fetches your saved routines via the Hevy API (`/v1/routines` endpoint)
-3. **Historical Analysis**: Looks at your last performance for each exercise in that specific routine
-4. **Smart Recommendations**: Suggests weight increases/decreases based on your last RPE readings
+1. **Configure Your Routine**: Copy `routine_config.example.py` to `routine_config.py` and customize
+2. **Cycle Pattern Recognition**: Define your workout pattern (any length: 3, 4, 5, 6+ days)
+3. **Hevy API Integration**: Fetches your saved routines via the Hevy API (`/v1/routines` endpoint)
+4. **Historical Analysis**: Looks at your last performance for each exercise in that specific routine
+5. **Smart Recommendations**: Suggests weight increases/decreases based on your last RPE readings
 
-**Example Output:**
-```
-🔄 CYCLICAL ROUTINE TRACKING
-📅 Next Scheduled Workout: Day 2 - Lower (Hamstring) 🦵
-⏰ Cycle Info: This workout repeats every 6 days
+**Setup (Optional):**
+```bash
+# 1. Copy the example configuration
+cp routine_config.example.py routine_config.py
 
-🎯 Exercise-Specific Recommendations:
-📈 Suggested Increases:
-   • Leg Press: 80kg → 82.5kg (RPE 7.0 indicates room for progression)
+# 2. Edit with your workout cycle
+# Examples included for:
+# - 6-Day Push/Pull/Legs (default example)
+# - 4-Day Upper/Lower Split  
+# - 3-Day Full Body
+# - 5-Day Bro Split
 
-📉 Suggested Decreases:  
-   • Standing Leg Curls: 12.5kg → 10kg (RPE 10.0 too high for better form)
-
-✅ Maintain Current Weights:
-   • Hip Abduction: Keep 27.5kg (RPE 8.5 is in good range)
+# 3. Run analysis to get next workout recommendations
+python hevy_stats.py analyze
 ```
 
 **Data Sources:**
@@ -155,6 +159,10 @@ cp setup_example.env .env
 HEVY_API_KEY=your-api-key-here
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASSWORD=your-gmail-app-password
+
+# Optional: Configure cyclical routine tracking
+cp routine_config.example.py routine_config.py
+# Edit routine_config.py with your workout cycle
 ```
 
 ### Usage
