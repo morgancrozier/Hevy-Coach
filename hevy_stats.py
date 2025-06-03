@@ -36,6 +36,251 @@ RPE_GUIDELINES = {
     "decrease_factor": 0.95,       # 5% weight decrease
 }
 
+# Import routine configuration
+try:
+    from routine_config import CYCLE_PATTERN, ROUTINE_TITLE_MAPPING, EXERCISE_PATTERNS
+except ImportError:
+    print("⚠️ Warning: routine_config.py not found. Using default 6-day cycle.")
+    print("💡 Copy routine_config.example.py to routine_config.py and customize for your routine.")
+    
+    # Default 6-day cycle as fallback
+    CYCLE_PATTERN = [
+        "Day 1 - Upper (Push) 💪",
+        "Day 2 - Lower (Hamstring) 🦵", 
+        "Day 3 - Rest / Treadmill",
+        "Day 4 - Upper (Pull) 💪",
+        "Day 5 - Lower (Quad) 🦵",
+        "Day 6 - Rest"
+    ]
+    
+    ROUTINE_TITLE_MAPPING = {
+        "Day 1 - Upper (Push) 💪": 0,
+        "Day 2 - Lower (Hamstring) 🦵": 1,
+        "Day 3 - Upper (Pull) 💪": 3,
+        "Day 4 - Lower (Quad) 🦵": 4
+    }
+    
+    EXERCISE_PATTERNS = {
+        "upper_push": {
+            "keywords": ["chest", "press", "shoulder", "dip", "tricep", "push"],
+            "next_cycle_day": 1
+        },
+        "lower_hamstring": {
+            "keywords": ["curl", "deadlift", "hamstring", "hip", "glute", "rdl", "sldl"],
+            "next_cycle_day": 2
+        },
+        "upper_pull": {
+            "keywords": ["lat", "pull", "row", "bicep", "chin", "pulldown"],
+            "next_cycle_day": 4
+        },
+        "lower_quad": {
+            "keywords": ["quad", "extension", "squat", "leg press", "lunge", "front squat"],
+            "next_cycle_day": 5
+        }
+    }
+
+class WorkoutCycle:
+    """Manages cyclical workout routines and determines next workout day."""
+    
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.cycle_pattern = CYCLE_PATTERN
+        
+        # Map routine titles to cycle days
+        self.routine_title_mapping = ROUTINE_TITLE_MAPPING
+        
+        self.client = None
+    
+    def _get_client(self):
+        """Lazy initialization of Hevy client."""
+        if self.client is None:
+            self.client = HevyStatsClient(self.api_key)
+        return self.client
+    
+    def get_user_routines(self) -> List[Dict]:
+        """Fetch user's defined routines from Hevy API."""
+        try:
+            client = self._get_client()
+            response = requests.get(
+                "https://api.hevyapp.com/v1/routines",
+                headers={
+                    "accept": "application/json",
+                    "api-key": self.api_key
+                },
+                params={"page": 1, "pageSize": 10}
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("routines", [])
+        except Exception as e:
+            print(f"⚠️ Could not fetch routines: {e}")
+            return []
+    
+    def determine_current_cycle_day(self, df: pd.DataFrame) -> int:
+        """Determine which day of the cycle the user is currently on based on recent workouts."""
+        if len(df) == 0:
+            return 0  # Default to Day 1
+        
+        # Get the most recent workout
+        recent_workouts = df.sort_values('date').tail(5)  # Look at last 5 workouts
+        
+        # Try to match workout titles to cycle days
+        for _, workout in recent_workouts.iterrows():
+            workout_title = workout.get('workout', '')
+            if workout_title in self.routine_title_mapping:
+                last_cycle_day = self.routine_title_mapping[workout_title]
+                # Next day in cycle
+                return (last_cycle_day + 1) % len(self.cycle_pattern)
+        
+        # If we can't determine from titles, analyze exercises to guess the workout type
+        last_workout = recent_workouts.iloc[-1]
+        exercises = recent_workouts[recent_workouts['date'] == last_workout['date']]['exercise'].unique()
+        
+        # Use configurable exercise patterns instead of hardcoded heuristics
+        exercise_str = ' '.join(exercises).lower()
+        
+        for pattern_name, pattern_config in EXERCISE_PATTERNS.items():
+            keywords = pattern_config["keywords"]
+            next_cycle_day = pattern_config["next_cycle_day"]
+            
+            if any(word in exercise_str for word in keywords):
+                return next_cycle_day
+        
+        # Default to Day 1 if can't determine
+        return 0
+    
+    def get_next_workout_info(self, df: pd.DataFrame) -> Dict:
+        """Get information about the next workout in the cycle."""
+        current_day_idx = self.determine_current_cycle_day(df)
+        next_workout = self.cycle_pattern[current_day_idx]
+        
+        # Get routine info if available
+        routines = self.get_user_routines()
+        matching_routine = None
+        
+        for routine in routines:
+            if routine['title'] in self.routine_title_mapping:
+                if self.routine_title_mapping[routine['title']] == current_day_idx:
+                    matching_routine = routine
+                    break
+        
+        return {
+            "cycle_day_index": current_day_idx,
+            "workout_name": next_workout,
+            "is_rest_day": "rest" in next_workout.lower(),
+            "routine_data": matching_routine,
+            "days_until_same_workout": len(self.cycle_pattern)
+        }
+    
+    def get_routine_specific_recommendations(self, df: pd.DataFrame, next_workout_info: Dict) -> Dict:
+        """Generate recommendations specific to the upcoming workout routine."""
+        if next_workout_info["is_rest_day"]:
+            return {
+                "type": "rest_day",
+                "recommendations": [
+                    "🛌 Focus on recovery and sleep quality",
+                    "🚶‍♂️ Light cardio (treadmill walking) is optional",
+                    "💧 Stay hydrated and maintain nutrition",
+                    "📱 Review form videos for your next training day"
+                ]
+            }
+        
+        routine_data = next_workout_info.get("routine_data")
+        if not routine_data:
+            return {"type": "general", "recommendations": ["No specific routine data available"]}
+        
+        # Filter historical data for this specific routine
+        cycle_day_idx = next_workout_info["cycle_day_index"]
+        matching_workouts = []
+        
+        # Find historical data for this same workout type
+        for routine_title, day_idx in self.routine_title_mapping.items():
+            if day_idx == cycle_day_idx:
+                matching_workouts = df[df['workout'].str.contains(routine_title.split(' -')[0], na=False)]
+                break
+        
+        recommendations = []
+        exercise_recommendations = {}
+        
+        # Analyze each exercise in the upcoming routine
+        for exercise_data in routine_data["exercises"]:
+            exercise_name = exercise_data["title"]
+            
+            if exercise_name in ["Warm Up", "Notes", "Treadmill"]:
+                continue
+                
+            # Find historical data for this exercise
+            exercise_history = df[df['exercise'] == exercise_name].sort_values('date')
+            
+            if len(exercise_history) > 0:
+                latest = exercise_history.iloc[-1]
+                
+                # Get the target weight/reps from routine template
+                normal_sets = [s for s in exercise_data["sets"] if s["type"] == "normal"]
+                if normal_sets:
+                    template_weight = normal_sets[0].get("weight_kg")
+                    template_reps = normal_sets[0].get("reps")
+                    
+                    # Compare with latest performance
+                    last_weight = latest.get('weight', 0)
+                    last_reps = latest.get('reps', 0)
+                    last_rpe = latest.get('rpe', 8.0)
+                    
+                    recommendation = self._generate_exercise_recommendation(
+                        exercise_name, last_weight, last_reps, last_rpe, 
+                        template_weight, template_reps
+                    )
+                    
+                    if recommendation:
+                        exercise_recommendations[exercise_name] = recommendation
+        
+        return {
+            "type": "workout_specific",
+            "workout_name": next_workout_info["workout_name"],
+            "exercise_recommendations": exercise_recommendations,
+            "general_recommendations": [
+                f"📋 Preparing for: {next_workout_info['workout_name']}",
+                f"⏰ This workout repeats every {next_workout_info['days_until_same_workout']} days",
+                "🎯 Focus on progressive overload where RPE allows"
+            ]
+        }
+    
+    def _generate_exercise_recommendation(self, exercise_name: str, last_weight: float, 
+                                        last_reps: float, last_rpe: float,
+                                        template_weight: Optional[float], 
+                                        template_reps: Optional[int]) -> Dict:
+        """Generate specific recommendation for an exercise."""
+        recommendation = {
+            "current_weight": last_weight,
+            "current_reps": last_reps,
+            "last_rpe": last_rpe,
+            "action": "maintain",
+            "suggested_weight": last_weight,
+            "reasoning": ""
+        }
+        
+        # RPE-based recommendations
+        if last_rpe < 7.5:
+            # Too easy - increase weight
+            suggested_increase = max(2.5, last_weight * 0.025)  # At least 2.5kg or 2.5% increase
+            recommendation.update({
+                "action": "increase",
+                "suggested_weight": last_weight + suggested_increase,
+                "reasoning": f"RPE {last_rpe} indicates room for progression (+{suggested_increase:.1f}kg)"
+            })
+        elif last_rpe > 9.0:
+            # Too hard - decrease weight
+            suggested_decrease = max(2.5, last_weight * 0.05)  # At least 2.5kg or 5% decrease
+            recommendation.update({
+                "action": "decrease", 
+                "suggested_weight": max(0, last_weight - suggested_decrease),
+                "reasoning": f"RPE {last_rpe} too high, reduce by {suggested_decrease:.1f}kg for better form"
+            })
+        else:
+            recommendation["reasoning"] = f"RPE {last_rpe} is in good range - maintain current weight"
+        
+        return recommendation
+
 class EmailSender:
     """Handle email notifications for Hevy coaching reports."""
     
@@ -1678,6 +1923,80 @@ def print_comprehensive_report(df: pd.DataFrame):
         
         if periodization and len(periodization["deload_candidates"]) > 0:
             print("• 🔄 Consider a deload week for stagnant exercises")
+    
+    # ========================
+    # NEW: CYCLICAL ROUTINE TRACKING & NEXT WORKOUT RECOMMENDATIONS
+    # ========================
+    api_key = os.getenv("HEVY_API_KEY")
+    if api_key:
+        try:
+            workout_cycle = WorkoutCycle(api_key)
+            next_workout_info = workout_cycle.get_next_workout_info(df)
+            cycle_recommendations = workout_cycle.get_routine_specific_recommendations(df, next_workout_info)
+            
+            print(f"\n\n🔄 **CYCLICAL ROUTINE TRACKING**")
+            print("-" * 50)
+            
+            print(f"📅 **Next Scheduled Workout**: {next_workout_info['workout_name']}")
+            
+            if next_workout_info["is_rest_day"]:
+                print("🛌 **Rest Day Recommendations**:")
+                for rec in cycle_recommendations["recommendations"]:
+                    print(f"   {rec}")
+            else:
+                print(f"⏰ **Cycle Info**: This workout repeats every {next_workout_info['days_until_same_workout']} days")
+                
+                if cycle_recommendations["type"] == "workout_specific":
+                    exercise_recs = cycle_recommendations["exercise_recommendations"]
+                    
+                    if exercise_recs:
+                        print(f"\n🎯 **Exercise-Specific Recommendations for {next_workout_info['workout_name']}**:")
+                        
+                        # Group recommendations by action type
+                        increases = []
+                        decreases = []
+                        maintains = []
+                        
+                        for exercise, rec in exercise_recs.items():
+                            action = rec["action"]
+                            current_weight = rec["current_weight"]
+                            suggested_weight = rec["suggested_weight"]
+                            reasoning = rec["reasoning"]
+                            
+                            if action == "increase":
+                                increases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
+                            elif action == "decrease":
+                                decreases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
+                            else:
+                                maintains.append(f"• **{exercise}**: Keep {current_weight:.1f}kg ({reasoning})")
+                        
+                        if increases:
+                            print("\n📈 **Suggested Increases**:")
+                            for inc in increases:
+                                print(f"   {inc}")
+                        
+                        if decreases:
+                            print("\n📉 **Suggested Decreases**:")
+                            for dec in decreases:
+                                print(f"   {dec}")
+                        
+                        if maintains:
+                            print("\n✅ **Maintain Current Weights**:")
+                            for maint in maintains[:5]:  # Show top 5
+                                print(f"   {maint}")
+                    
+                    print(f"\n💡 **General Recommendations**:")
+                    for rec in cycle_recommendations["general_recommendations"]:
+                        print(f"   • {rec}")
+                else:
+                    print("ℹ️ No specific routine data available - using general recommendations")
+            
+        except Exception as e:
+            print(f"\n⚠️ **Cyclical Routine Tracking**: Could not analyze workout cycle ({str(e)})")
+            print("💡 This feature requires your routine data to be accessible via the Hevy API")
+    else:
+        print(f"\n⚠️ **Cyclical Routine Tracking**: Disabled (no API key found)")
+        print("💡 Set HEVY_API_KEY environment variable to enable next workout recommendations")
     
     print("\n" + "="*80)
 

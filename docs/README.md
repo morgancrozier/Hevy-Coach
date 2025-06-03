@@ -25,6 +25,11 @@ New to the tool? Start here:
   - Smart Periodization Insights
   - Volume & Recovery Analysis
   - RPE-Based Coaching
+- **[🔄 Cyclical Routine Tracking](CYCLICAL-ROUTINES.md)** - NEW: Next workout predictions and cycle-aware recommendations
+  - Automatic cycle detection and next workout prediction
+  - Exercise-specific weight adjustments based on RPE history
+  - Integration with your Hevy routine templates
+  - Rest day vs. training day guidance
 
 ### Technical Reference
 - **[API Reference](API-REFERENCE.md)** - Hevy API integration details

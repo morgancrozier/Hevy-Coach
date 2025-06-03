@@ -16,6 +16,12 @@
 - Volume trends and recovery insights
 - Plateau detection and periodization suggestions
 
+🔄 **NEW: Cyclical Routine Tracking** 
+- Automatically detects your workout cycle (e.g., Push/Pull/Legs)
+- Provides recommendations for your NEXT upcoming workout
+- Exercise-specific weight adjustments based on RPE history
+- Fetches your actual routine templates from Hevy for detailed guidance
+
 📧 **Automated Daily Reports**
 - Full coaching reports emailed to you daily
 - Markdown and CSV exports for deeper analysis
@@ -78,6 +84,40 @@ python3 hevy_stats.py both --email
 ```
 
 ## 🔧 Features
+
+### 🔄 **NEW: Cyclical Routine Intelligence**
+- **Automatic Cycle Detection**: Analyzes your recent workouts to determine where you are in your routine cycle
+- **Next Workout Predictions**: Instead of analyzing today's completed workout, predicts what you should do in your next session
+- **Routine Template Integration**: Fetches your saved routines from Hevy to provide specific exercise recommendations
+- **RPE-Based Weight Adjustments**: Uses your historical RPE data to suggest precise weight changes for each exercise
+
+**How It Works:**
+1. **Cycle Pattern Recognition**: The system knows your workout pattern (currently supports 6-day cycles)
+2. **Hevy API Integration**: Fetches your saved routines via the Hevy API (`/v1/routines` endpoint)
+3. **Historical Analysis**: Looks at your last performance for each exercise in that specific routine
+4. **Smart Recommendations**: Suggests weight increases/decreases based on your last RPE readings
+
+**Example Output:**
+```
+🔄 CYCLICAL ROUTINE TRACKING
+📅 Next Scheduled Workout: Day 2 - Lower (Hamstring) 🦵
+⏰ Cycle Info: This workout repeats every 6 days
+
+🎯 Exercise-Specific Recommendations:
+📈 Suggested Increases:
+   • Leg Press: 80kg → 82.5kg (RPE 7.0 indicates room for progression)
+
+📉 Suggested Decreases:  
+   • Standing Leg Curls: 12.5kg → 10kg (RPE 10.0 too high for better form)
+
+✅ Maintain Current Weights:
+   • Hip Abduction: Keep 27.5kg (RPE 8.5 is in good range)
+```
+
+**Data Sources:**
+- **Your Hevy Routines**: Fetched from your Hevy account via API
+- **Workout History**: Your recent training sessions to determine cycle position
+- **Exercise Performance**: Historical weight, reps, and RPE data for each exercise
 
 ### 🧠 Smart RPE Analysis
 - Detects when weight decreases are **smart deloads** vs. actual regressions
