@@ -165,13 +165,14 @@ class EmailSender:
         
         condensed += "</div>"
         
-        # Add collapsible full report
+        # Add simple collapsible full report (no scrolling, just expand)
+        full_html = self.markdown_to_html(report_content)
         condensed += f"""
         <div class="full-report">
             <details>
-                <summary><h2>📄 Complete Detailed Analysis (Click to Expand)</h2></summary>
+                <summary>📄 View Complete Detailed Analysis</summary>
                 <div class="detailed-content">
-                    {self.markdown_to_html(report_content)}
+                    {full_html}
                 </div>
             </details>
         </div>
@@ -195,7 +196,7 @@ class EmailSender:
             # Create condensed email content
             condensed_content = self.create_condensed_email_content(report_content)
             
-            # Create HTML email body with improved styling
+            # Create HTML email body with simplified mobile-friendly styling
             html_body = f"""
             <!DOCTYPE html>
             <html>
@@ -205,39 +206,37 @@ class EmailSender:
                 <style>
                     body {{
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-                        line-height: 1.6;
+                        line-height: 1.5;
                         color: #333;
                         max-width: 600px;
                         margin: 0 auto;
-                        padding: 20px;
+                        padding: 15px;
                         background-color: #f8f9fa;
                     }}
                     .container {{
                         background-color: white;
-                        padding: 30px;
-                        border-radius: 10px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        padding: 20px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     }}
                     h1 {{
                         color: #2c3e50;
-                        border-bottom: 3px solid #3498db;
-                        padding-bottom: 10px;
+                        border-bottom: 2px solid #3498db;
+                        padding-bottom: 8px;
                         margin-bottom: 20px;
-                        font-size: 1.5em;
+                        font-size: 1.4em;
                     }}
                     h2 {{
                         color: #34495e;
-                        border-bottom: 2px solid #ecf0f1;
-                        padding-bottom: 8px;
-                        margin-top: 25px;
-                        margin-bottom: 15px;
-                        font-size: 1.2em;
+                        margin-top: 20px;
+                        margin-bottom: 12px;
+                        font-size: 1.1em;
                     }}
                     h3 {{
                         color: #2c3e50;
-                        margin-top: 15px;
+                        margin-top: 12px;
                         margin-bottom: 8px;
-                        font-size: 1.1em;
+                        font-size: 1em;
                     }}
                     
                     /* Quick Summary Styling */
@@ -245,112 +244,140 @@ class EmailSender:
                         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white;
                         padding: 20px;
-                        border-radius: 10px;
+                        border-radius: 8px;
                         margin-bottom: 20px;
                         text-align: center;
                     }}
                     .grade-box {{
-                        background: rgba(255,255,255,0.1);
+                        background: rgba(255,255,255,0.15);
                         padding: 15px;
-                        border-radius: 8px;
+                        border-radius: 6px;
                         margin-top: 10px;
                     }}
                     .grade {{
-                        font-size: 2em;
+                        font-size: 1.8em;
                         font-weight: bold;
                         display: block;
-                        margin-bottom: 10px;
+                        margin-bottom: 8px;
                     }}
                     .progression {{
                         font-weight: bold;
-                        margin-top: 10px;
+                        margin-top: 8px;
+                        font-size: 0.95em;
                     }}
                     
                     /* Action Section Styling */
                     .action-section {{
                         background: #f8f9fa;
-                        padding: 20px;
-                        border-radius: 8px;
+                        padding: 15px;
+                        border-radius: 6px;
                         margin-bottom: 20px;
                     }}
                     .adjustments {{
                         background: #fff3cd;
                         border-left: 4px solid #f39c12;
-                        padding: 15px;
-                        margin: 10px 0;
-                        border-radius: 0 6px 6px 0;
+                        padding: 12px;
+                        margin: 8px 0;
+                        border-radius: 0 4px 4px 0;
                     }}
                     .good-weights {{
                         background: #d5f4e6;
                         border-left: 4px solid #27ae60;
-                        padding: 15px;
-                        margin: 10px 0;
-                        border-radius: 0 6px 6px 0;
+                        padding: 12px;
+                        margin: 8px 0;
+                        border-radius: 0 4px 4px 0;
                     }}
                     .insights {{
                         background: #e3f2fd;
                         border-left: 4px solid #2196f3;
-                        padding: 15px;
-                        margin: 10px 0;
-                        border-radius: 0 6px 6px 0;
+                        padding: 12px;
+                        margin: 8px 0;
+                        border-radius: 0 4px 4px 0;
                     }}
                     
-                    /* Full Report Styling */
+                    /* Simplified Full Report */
                     .full-report {{
-                        margin-top: 30px;
-                        border-top: 2px solid #ecf0f1;
-                        padding-top: 20px;
+                        margin-top: 25px;
+                        border-top: 1px solid #dee2e6;
+                        padding-top: 15px;
                     }}
                     details {{
                         background: #f8f9fa;
-                        border-radius: 8px;
-                        padding: 15px;
+                        border-radius: 6px;
+                        padding: 10px;
                     }}
                     summary {{
                         cursor: pointer;
                         font-weight: bold;
-                        margin-bottom: 15px;
-                        padding: 10px;
+                        padding: 8px;
                         background: #e9ecef;
-                        border-radius: 6px;
+                        border-radius: 4px;
+                        margin-bottom: 10px;
+                        font-size: 0.95em;
                     }}
                     summary:hover {{
                         background: #dee2e6;
                     }}
                     .detailed-content {{
-                        margin-top: 15px;
-                        max-height: 500px;
-                        overflow-y: auto;
-                        border: 1px solid #dee2e6;
-                        border-radius: 6px;
-                        padding: 15px;
+                        margin-top: 10px;
+                        padding: 10px;
                         background: white;
+                        border-radius: 4px;
+                        border: 1px solid #dee2e6;
                     }}
                     
+                    /* Simple list styling */
                     ul {{ 
-                        padding-left: 20px; 
-                        margin: 10px 0;
+                        padding-left: 18px; 
+                        margin: 8px 0;
                     }}
                     li {{ 
-                        margin: 5px 0;
+                        margin: 3px 0;
                         line-height: 1.4;
                     }}
-                    .footer {{
-                        margin-top: 30px;
-                        padding-top: 15px;
-                        border-top: 2px solid #ecf0f1;
-                        text-align: center;
-                        color: #7f8c8d;
-                        font-size: 0.9em;
+                    
+                    /* Clean paragraph styling */
+                    p {{
+                        margin: 8px 0;
+                        line-height: 1.4;
                     }}
                     
-                    /* Mobile responsiveness */
+                    .footer {{
+                        margin-top: 25px;
+                        padding-top: 12px;
+                        border-top: 1px solid #dee2e6;
+                        text-align: center;
+                        color: #6c757d;
+                        font-size: 0.85em;
+                    }}
+                    
+                    /* Mobile-first responsive design */
                     @media (max-width: 600px) {{
-                        body {{ padding: 10px; }}
-                        .container {{ padding: 20px; }}
-                        h1 {{ font-size: 1.3em; }}
-                        h2 {{ font-size: 1.1em; }}
-                        .grade {{ font-size: 1.5em; }}
+                        body {{ 
+                            padding: 10px; 
+                            font-size: 14px;
+                        }}
+                        .container {{ 
+                            padding: 15px; 
+                        }}
+                        h1 {{ 
+                            font-size: 1.2em; 
+                        }}
+                        h2 {{ 
+                            font-size: 1em; 
+                        }}
+                        .grade {{ 
+                            font-size: 1.5em; 
+                        }}
+                        .quick-summary {{
+                            padding: 15px;
+                        }}
+                        .action-section {{
+                            padding: 12px;
+                        }}
+                        .adjustments, .good-weights, .insights {{
+                            padding: 10px;
+                        }}
                     }}
                 </style>
             </head>
@@ -361,8 +388,8 @@ class EmailSender:
                     {condensed_content}
                     
                     <div class="footer">
-                        <p>💡 AI-powered coaching analysis • Generated {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</p>
-                        <p><strong>Hevy Coach Pro</strong></p>
+                        <p>💡 AI-powered coaching analysis</p>
+                        <p>Generated {datetime.now().strftime('%Y-%m-%d %H:%M UTC')} • <strong>Hevy Coach Pro</strong></p>
                     </div>
                 </div>
             </body>
