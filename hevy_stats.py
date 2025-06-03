@@ -63,6 +63,122 @@ class EmailSender:
             print(f"❌ Email connection failed: {e}")
             return False
     
+    def create_condensed_email_content(self, report_content: str) -> str:
+        """Create a condensed, mobile-friendly version of the report for email."""
+        lines = report_content.split('\n')
+        
+        # Extract key metrics
+        grade = ""
+        assessment = ""
+        progression = ""
+        adjustments_needed = []
+        good_weights = []
+        key_insights = []
+        
+        # Parse the report for key information
+        in_adjustments = False
+        in_good_weights = False
+        in_insights = False
+        
+        for line in lines:
+            # Session quality
+            if "Overall Grade" in line and ":" in line:
+                grade = line.split(":", 1)[1].strip()
+            elif "Assessment" in line and ":" in line:
+                assessment = line.split(":", 1)[1].strip()
+            elif "Progression" in line and "progressed" in line:
+                progression = line.split(":", 1)[1].strip()
+            
+            # Next session recommendations
+            elif "Weight Adjustments Needed" in line:
+                in_adjustments = True
+                in_good_weights = False
+                in_insights = False
+            elif "Keep These Weights" in line:
+                in_adjustments = False
+                in_good_weights = True
+                in_insights = False
+            elif "Smart Focus Points" in line:
+                in_adjustments = False
+                in_good_weights = False
+                in_insights = True
+            elif line.startswith("• **") and in_adjustments:
+                exercise = line.split("**")[1]
+                adjustments_needed.append(exercise)
+            elif line.startswith("• **") and in_good_weights:
+                exercise = line.split("**")[1]
+                good_weights.append(exercise)
+            elif line.startswith("• ") and in_insights:
+                key_insights.append(line[2:])  # Remove bullet point
+        
+        # Create condensed content
+        condensed = f"""
+        <div class="quick-summary">
+            <h2>📊 Today's Session Summary</h2>
+            <div class="grade-box">
+                <span class="grade">{grade}</span>
+                <p>{assessment}</p>
+                <p class="progression">{progression}</p>
+            </div>
+        </div>
+
+        <div class="action-section">
+            <h2>🎯 Next Session Actions</h2>
+        """
+        
+        if adjustments_needed:
+            condensed += f"""
+            <div class="adjustments">
+                <h3>🔧 Weight Changes Needed ({len(adjustments_needed)})</h3>
+                <ul>
+            """
+            for exercise in adjustments_needed[:5]:  # Show max 5
+                condensed += f"<li><strong>{exercise}</strong></li>"
+            if len(adjustments_needed) > 5:
+                condensed += f"<li><em>...and {len(adjustments_needed) - 5} more</em></li>"
+            condensed += "</ul></div>"
+        
+        if good_weights:
+            count_display = f" ({len(good_weights)})" if len(good_weights) > 3 else ""
+            condensed += f"""
+            <div class="good-weights">
+                <h3>✅ Keep Current Weights{count_display}</h3>
+            """
+            if len(good_weights) <= 3:
+                condensed += "<ul>"
+                for exercise in good_weights:
+                    condensed += f"<li>{exercise}</li>"
+                condensed += "</ul>"
+            else:
+                condensed += f"<p>All other exercises are at optimal weights - maintain current loads!</p>"
+            condensed += "</div>"
+        
+        if key_insights:
+            condensed += f"""
+            <div class="insights">
+                <h3>💡 Key Focus Points</h3>
+                <ul>
+            """
+            for insight in key_insights[:3]:  # Show top 3 insights
+                condensed += f"<li>{insight}</li>"
+            condensed += "</ul></div>"
+        
+        condensed += "</div>"
+        
+        # Add collapsible full report
+        condensed += f"""
+        <div class="full-report">
+            <details>
+                <summary><h2>📄 Complete Detailed Analysis (Click to Expand)</h2></summary>
+                <div class="detailed-content">
+                    {self.markdown_to_html(report_content)}
+                </div>
+            </details>
+        </div>
+        """
+        
+        return condensed
+    
     def send_report(self, report_content: str, markdown_file: str = None) -> bool:
         """Send the coaching report via email."""
         if not self.email_user or not self.email_password:
@@ -76,10 +192,10 @@ class EmailSender:
             msg['To'] = self.to_email
             msg['Subject'] = f"🏋️‍♂️ Hevy Coaching Report - {datetime.now().strftime('%Y-%m-%d')}"
             
-            # Convert markdown report to HTML
-            html_content = self.markdown_to_html(report_content)
+            # Create condensed email content
+            condensed_content = self.create_condensed_email_content(report_content)
             
-            # Create HTML email body
+            # Create HTML email body with improved styling
             html_body = f"""
             <!DOCTYPE html>
             <html>
@@ -91,7 +207,7 @@ class EmailSender:
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
                         line-height: 1.6;
                         color: #333;
-                        max-width: 800px;
+                        max-width: 600px;
                         margin: 0 auto;
                         padding: 20px;
                         background-color: #f8f9fa;
@@ -106,98 +222,163 @@ class EmailSender:
                         color: #2c3e50;
                         border-bottom: 3px solid #3498db;
                         padding-bottom: 10px;
-                        margin-bottom: 30px;
+                        margin-bottom: 20px;
+                        font-size: 1.5em;
                     }}
                     h2 {{
                         color: #34495e;
                         border-bottom: 2px solid #ecf0f1;
                         padding-bottom: 8px;
-                        margin-top: 30px;
-                        margin-bottom: 20px;
+                        margin-top: 25px;
+                        margin-bottom: 15px;
+                        font-size: 1.2em;
                     }}
                     h3 {{
                         color: #2c3e50;
-                        margin-top: 20px;
-                        margin-bottom: 10px;
+                        margin-top: 15px;
+                        margin-bottom: 8px;
+                        font-size: 1.1em;
                     }}
-                    .metric {{
-                        background: #ecf0f1;
-                        padding: 8px 12px;
-                        border-radius: 6px;
-                        margin: 5px 0;
-                        border-left: 4px solid #3498db;
+                    
+                    /* Quick Summary Styling */
+                    .quick-summary {{
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 20px;
+                        border-radius: 10px;
+                        margin-bottom: 20px;
+                        text-align: center;
                     }}
-                    .exercise {{
-                        background: #f8f9fa;
+                    .grade-box {{
+                        background: rgba(255,255,255,0.1);
                         padding: 15px;
                         border-radius: 8px;
+                        margin-top: 10px;
+                    }}
+                    .grade {{
+                        font-size: 2em;
+                        font-weight: bold;
+                        display: block;
+                        margin-bottom: 10px;
+                    }}
+                    .progression {{
+                        font-weight: bold;
+                        margin-top: 10px;
+                    }}
+                    
+                    /* Action Section Styling */
+                    .action-section {{
+                        background: #f8f9fa;
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin-bottom: 20px;
+                    }}
+                    .adjustments {{
+                        background: #fff3cd;
+                        border-left: 4px solid #f39c12;
+                        padding: 15px;
                         margin: 10px 0;
-                        border-left: 4px solid #27ae60;
+                        border-radius: 0 6px 6px 0;
                     }}
-                    .good {{ color: #27ae60; font-weight: bold; }}
-                    .warning {{ color: #f39c12; font-weight: bold; }}
-                    .error {{ color: #e74c3c; font-weight: bold; }}
-                    .grade {{ 
-                        font-size: 1.2em; 
-                        font-weight: bold; 
-                        color: #27ae60;
+                    .good-weights {{
                         background: #d5f4e6;
-                        padding: 8px 16px;
-                        border-radius: 6px;
-                        display: inline-block;
+                        border-left: 4px solid #27ae60;
+                        padding: 15px;
+                        margin: 10px 0;
+                        border-radius: 0 6px 6px 0;
                     }}
-                    ul {{ padding-left: 20px; }}
-                    li {{ margin: 5px 0; }}
-                    .footer {{
-                        margin-top: 40px;
+                    .insights {{
+                        background: #e3f2fd;
+                        border-left: 4px solid #2196f3;
+                        padding: 15px;
+                        margin: 10px 0;
+                        border-radius: 0 6px 6px 0;
+                    }}
+                    
+                    /* Full Report Styling */
+                    .full-report {{
+                        margin-top: 30px;
+                        border-top: 2px solid #ecf0f1;
                         padding-top: 20px;
+                    }}
+                    details {{
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                        padding: 15px;
+                    }}
+                    summary {{
+                        cursor: pointer;
+                        font-weight: bold;
+                        margin-bottom: 15px;
+                        padding: 10px;
+                        background: #e9ecef;
+                        border-radius: 6px;
+                    }}
+                    summary:hover {{
+                        background: #dee2e6;
+                    }}
+                    .detailed-content {{
+                        margin-top: 15px;
+                        max-height: 500px;
+                        overflow-y: auto;
+                        border: 1px solid #dee2e6;
+                        border-radius: 6px;
+                        padding: 15px;
+                        background: white;
+                    }}
+                    
+                    ul {{ 
+                        padding-left: 20px; 
+                        margin: 10px 0;
+                    }}
+                    li {{ 
+                        margin: 5px 0;
+                        line-height: 1.4;
+                    }}
+                    .footer {{
+                        margin-top: 30px;
+                        padding-top: 15px;
                         border-top: 2px solid #ecf0f1;
                         text-align: center;
                         color: #7f8c8d;
-                    }}
-                    pre {{ 
-                        background: #f4f4f4; 
-                        padding: 10px; 
-                        border-radius: 5px; 
-                        overflow-x: auto;
                         font-size: 0.9em;
+                    }}
+                    
+                    /* Mobile responsiveness */
+                    @media (max-width: 600px) {{
+                        body {{ padding: 10px; }}
+                        .container {{ padding: 20px; }}
+                        h1 {{ font-size: 1.3em; }}
+                        h2 {{ font-size: 1.1em; }}
+                        .grade {{ font-size: 1.5em; }}
                     }}
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>🏋️‍♂️ Your Complete Daily Hevy Coaching Report</h1>
-                    <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</p>
+                    <h1>🏋️‍♂️ Daily Hevy Coaching Report</h1>
                     
-                    {html_content}
+                    {condensed_content}
                     
                     <div class="footer">
-                        <p>💡 This automated analysis uses your Hevy workout data to provide<br>
-                        intelligent RPE-based progression recommendations and coaching insights.</p>
-                        <p>🚀 Keep up the great work! Your fitness journey is being tracked<br>
-                        and optimized with every session.</p>
-                        <p><strong>Generated by Hevy Coach Pro</strong></p>
+                        <p>💡 AI-powered coaching analysis • Generated {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</p>
+                        <p><strong>Hevy Coach Pro</strong></p>
                     </div>
                 </div>
             </body>
             </html>
             """
             
-            # Create plain text fallback
-            plain_text = self.markdown_to_plain_text(report_content)
-            text_body = f"""🏋️‍♂️ Your Complete Daily Hevy Coaching Report
+            # Create plain text fallback (condensed version)
+            plain_text = self.create_plain_text_summary(report_content)
+            text_body = f"""🏋️‍♂️ Daily Hevy Coaching Report
 
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
 
 {plain_text}
 
-───────────────────────────────────────────────────────────────
-💡 This automated analysis uses your Hevy workout data to provide
-intelligent RPE-based progression recommendations and coaching insights.
-
-🚀 Keep up the great work! Your fitness journey is being tracked
-and optimized with every session.
-
+─────────────────────────────────────────────────────────────
+💡 AI-powered coaching analysis
 Generated by Hevy Coach Pro
             """
             
@@ -232,6 +413,47 @@ Generated by Hevy Coach Pro
         except Exception as e:
             print(f"❌ Failed to send email: {e}")
             return False
+    
+    def create_plain_text_summary(self, content: str) -> str:
+        """Create a plain text summary of key points."""
+        lines = content.split('\n')
+        
+        summary = ""
+        
+        # Extract session quality
+        for line in lines:
+            if "Overall Grade" in line:
+                summary += f"📊 {line.strip()}\n"
+            elif "Assessment" in line:
+                summary += f"📝 {line.strip()}\n"
+            elif "Progression" in line and "progressed" in line:
+                summary += f"💪 {line.strip()}\n"
+        
+        summary += f"\n🎯 NEXT SESSION ACTIONS:\n"
+        summary += f"────────────────────────\n"
+        
+        # Extract weight adjustments
+        in_adjustments = False
+        adjustment_count = 0
+        for line in lines:
+            if "Weight Adjustments Needed" in line:
+                in_adjustments = True
+            elif "Keep These Weights" in line:
+                in_adjustments = False
+            elif line.startswith("• **") and in_adjustments and adjustment_count < 3:
+                exercise = line.split("**")[1]
+                summary += f"🔧 {exercise}\n"
+                adjustment_count += 1
+        
+        if adjustment_count == 0:
+            summary += f"✅ All exercises at optimal weights!\n"
+        
+        # Add key insights
+        summary += f"\n💡 KEY FOCUS:\n"
+        summary += f"• Aim for RPE 7.5-9 for optimal growth\n"
+        summary += f"• Listen to your body and adjust accordingly\n"
+        
+        return summary
     
     def markdown_to_html(self, content: str) -> str:
         """Convert markdown-formatted report content to HTML."""
