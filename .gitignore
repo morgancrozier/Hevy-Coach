@@ -1,17 +1,27 @@
-# Sensitive Data
+# Environment files
 .env
+.env.local
+.env.production
+
+# Generated data files
 hevy_events.json
-hevy_workouts_*.json
-
-# Generated Reports
 hevy_coaching_report_*.md
-hevy_workout_data_*.csv
+hevy_workouts_export_*.csv
+hevy_automation.log
 
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -28,34 +38,23 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# Virtual Environments
-venv/
-env/
-ENV/
-.venv/
-
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# macOS
+# OS
 .DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows
-Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 ehthumbs.db
-Desktop.ini
+Thumbs.db
 
-# Logs
-*.log
-
-# Keep docs directory structure
-!docs/
-!docs/*.md 
+# Temporary files
+*.tmp
+*.temp
+*.log 

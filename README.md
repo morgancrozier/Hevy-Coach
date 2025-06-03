@@ -1,3 +1,188 @@
+# 🏋️‍♂️ Hevy Fitness Coach & Analytics
+
+**AI-powered coaching insights from your Hevy workout data** - Get personalized recommendations, progression tracking, and intelligent RPE-based guidance automatically delivered to your inbox daily!
+
+## ✨ What This Does
+
+🎯 **Intelligent Coaching Analysis**
+- Session quality scoring with A+ to D grades
+- RPE-aware progression recommendations  
+- Smart detection of good vs. problematic weight changes
+- Historical decision analysis ("what should I have done?")
+
+📊 **Comprehensive Analytics**
+- Exercise progression tracking over time
+- Peak performance analysis with context
+- Volume trends and recovery insights
+- Plateau detection and periodization suggestions
+
+📧 **Automated Daily Reports**
+- Full coaching reports emailed to you daily
+- Markdown and CSV exports for deeper analysis
+- Runs automatically in the cloud (no server needed!)
+
+## 🚀 Quick Start Options
+
+### Option 1: Cloud Automation (Recommended)
+**Best for:** Daily automated reports without any server setup
+
+**📖 [GitHub Actions Setup Guide](GITHUB_ACTIONS_SETUP.md)** ← **Start here!**
+- ✅ Completely free (GitHub's 2,000 free minutes/month)
+- ✅ Runs in the cloud - laptop can be off
+- ✅ Reliable daily email delivery
+- ✅ 10-minute setup
+
+### Option 2: Local/Manual Use
+**Best for:** Occasional analysis or testing
+
+**📖 [Local Automation Guide](DAILY_AUTOMATION.md)**
+- Run on your laptop/desktop
+- Cron jobs for scheduling
+- Full control over environment
+
+## 📋 Prerequisites
+
+1. **Hevy Account** with workout data
+2. **Hevy API Key** from [hevy.com/developer](https://hevy.com/developer)
+3. **Gmail Account** (for email reports)
+4. **GitHub Account** (for cloud automation)
+
+## ⚡ Quick Demo
+
+```bash
+# Test it out locally first
+python3 hevy_stats.py analyze
+
+# With email (after setting up environment variables)
+python3 hevy_stats.py both --email
+```
+
+## 🎯 Sample Output
+
+```
+🏋️‍♂️  HEVY COMPREHENSIVE COACHING REPORT
+================================================================================
+
+⭐ SESSION QUALITY ASSESSMENT
+🎯 Overall Grade: A- (87/100)
+📝 Assessment: Great session with solid progression.
+💪 Progression: 3 progressed, 2 maintained, 1 smart adjustments, 0 regressed
+
+💡 NEXT SESSION RECOMMENDATIONS  
+🔧 Weight Adjustments Needed:
+• Chest Dip (Assisted): reduce to 32.5kg next time (peak RPE 9.5 too high)
+
+✅ Keep These Weights (they're working!):
+• Seated Dip Machine: perfect intensity - maintain this weight!
+• Leg Press: perfect intensity - maintain this weight!
+```
+
+## 🔧 Features
+
+### 🧠 Smart RPE Analysis
+- Detects when weight decreases are **smart deloads** vs. actual regressions
+- RPE-justified decisions show as "✅ Smart Adjustments" 
+- Provides realistic weight recommendations based on equipment increments
+
+### 📈 Progression Intelligence  
+- Tracks 3-4 sessions per exercise for context
+- Identifies plateaus and suggests interventions
+- Historical "what should I have done?" analysis
+
+### 🎯 Practical Recommendations
+- Weight suggestions rounded to realistic gym increments (2.5kg, 5kg)
+- RPE-based intensity guidance (target 7.5-9.0 for optimal growth)
+- Exercise-specific rep range targeting
+
+### 📊 Export & Backup
+- Clean CSV exports for spreadsheet analysis
+- Markdown reports for easy reading/sharing
+- Automatic file timestamps and organization
+
+## 🛠️ Installation & Setup
+
+### Requirements
+```bash
+pip install requests pandas tabulate python-dotenv
+```
+
+### Environment Setup
+```bash
+# Copy example file
+cp setup_example.env .env
+
+# Edit with your credentials
+HEVY_API_KEY=your-api-key-here
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-gmail-app-password
+```
+
+### Usage
+```bash
+# Fetch and analyze
+python3 hevy_stats.py both
+
+# Analyze existing data
+python3 hevy_stats.py analyze
+
+# Export to CSV only
+python3 hevy_stats.py export --days 30
+
+# Send email report
+python3 hevy_stats.py analyze --email
+
+# Test email setup
+python3 hevy_stats.py --test-email
+```
+
+## 📧 Email Setup (Gmail)
+
+1. Enable 2-Factor Authentication on Google account
+2. Generate an "App Password" for Mail
+3. Use the app password in `EMAIL_PASSWORD` (not your regular password)
+
+## 🌟 Why This Is Different
+
+Unlike simple workout loggers, this provides **intelligent coaching context**:
+
+- ❌ **Basic tracker**: "You decreased weight"
+- ✅ **This tool**: "Smart weight reduction - responded to high RPE 9.5" 
+
+- ❌ **Basic tracker**: "You're below your peak"  
+- ✅ **This tool**: "Below unsustainable peak (peak RPE 10.0 was too high - good deload)"
+
+- ❌ **Basic tracker**: Lists numbers
+- ✅ **This tool**: "Should have decreased but maintained instead (previous RPE 9.5 was too high)"
+
+## 🔒 Security & Privacy
+
+- ✅ All credentials stored as environment variables
+- ✅ No hardcoded secrets in repository
+- ✅ Data stays on GitHub/your local machine
+- ✅ Safe to fork and share publicly
+
+## 🤝 Contributing
+
+Found a bug or want to add features? Pull requests welcome!
+
+Common improvements:
+- Additional exercise classification
+- More email providers
+- Advanced analytics
+- Mobile app integration
+
+## 📄 License
+
+MIT License - feel free to modify and share!
+
+---
+
+**🎉 Start getting smarter about your workouts today!** 
+
+Choose your automation method:
+- 🌐 **[GitHub Actions](GITHUB_ACTIONS_SETUP.md)** - Cloud automation (recommended)
+- 💻 **[Local Setup](DAILY_AUTOMATION.md)** - Run on your machine
+
 # 🏋️‍♂️ Hevy Fitness Coach
 
 A comprehensive Python tool that transforms your [Hevy](https://hevy.com) workout data into intelligent coaching insights. Get personalized training recommendations, track progressive overload, detect plateaus, and optimize your fitness journey with data-driven analysis.
@@ -214,3 +399,190 @@ This tool provides fitness insights based on your workout data. Always consult w
 **Made with ❤️ for the fitness community**
 
 *Like this project? Give it a ⭐ and share it with fellow lifters!* 
+
+# 🏋️‍♂️ Hevy Coach Pro
+
+An intelligent personal training coach that analyzes your Hevy workout data and provides comprehensive coaching insights with RPE-based recommendations, session quality grading, and automated email reports.
+
+## ✨ Features
+
+- **🎯 Session Quality Grading**: A+ to D grades based on progression and RPE balance
+- **📈 Exercise Progression Analysis**: Track weight progression across multiple sessions
+- **🔍 Historical Decision Analysis**: Learn from past sessions and identify missed opportunities
+- **💪 RPE-Based Coaching**: Intelligent recommendations using Rate of Perceived Exertion
+- **📊 Comprehensive Trends**: Volume analysis, strength progression rates, and fitness trajectories
+- **🏆 Peak Performance Tracking**: Monitor distance from personal bests
+- **📧 Automated Email Reports**: Daily coaching reports delivered to your inbox
+- **📝 Markdown Export**: Beautiful, shareable reports
+
+## 🚀 Quick Start
+
+### 1. Get Your Hevy API Key
+1. Open the Hevy app
+2. Go to Settings → Developer → API Key
+3. Copy your API key
+
+### 2. Set Up Environment
+```bash
+# Required
+export HEVY_API_KEY="your-hevy-api-key-here"
+
+# Optional (for email notifications)
+export EMAIL_USER="your-email@gmail.com"
+export EMAIL_PASSWORD="your-app-password"
+export TO_EMAIL="recipient@email.com"
+```
+
+### 3. Install Dependencies
+```bash
+pip install requests pandas tabulate python-dotenv
+```
+
+### 4. Run Analysis
+```bash
+# Basic analysis
+python hevy_stats.py
+
+# With email notification
+python hevy_stats.py both --email
+
+# Test email setup
+python hevy_stats.py --test-email
+```
+
+## 📧 Email Notifications
+
+Set up automated daily coaching reports delivered to your email!
+
+### Quick Email Setup (Gmail)
+1. **Enable 2-Factor Authentication** on your Google account
+2. **Generate App Password**: Google Account → Security → App passwords
+3. **Set environment variables**:
+   ```bash
+   export EMAIL_USER="your-email@gmail.com"
+   export EMAIL_PASSWORD="your-16-char-app-password"
+   export TO_EMAIL="recipient@email.com"
+   ```
+4. **Test**: `python hevy_stats.py --test-email`
+5. **Send report**: `python hevy_stats.py both --email`
+
+### Automated Daily Reports (GitHub Actions)
+1. **Fork this repository**
+2. **Add repository secrets**:
+   - `HEVY_API_KEY`: Your Hevy API key
+   - `EMAIL_USER`: Your email address
+   - `EMAIL_PASSWORD`: Your email app password
+   - `TO_EMAIL`: Recipient email
+3. **The workflow runs daily at 12:00 UTC** (customize in `.github/workflows/daily-hevy-report.yml`)
+
+📖 **Full Setup Guide**: See [NOTIFICATIONS.md](NOTIFICATIONS.md) for detailed instructions including Outlook, local automation, and alternative notification methods.
+
+## 📊 What You Get
+
+### Session Quality Assessment
+- **Overall Grade**: A+ to D based on progression and intensity
+- **RPE Balance Score**: How well you managed training intensity
+- **Progress Score**: Weight progression across exercises
+
+### Exercise Analysis
+- **Progression Tracking**: Weight changes over last 3-4 sessions
+- **RPE-Based Recommendations**: Increase/decrease/maintain based on effort
+- **Historical Decision Analysis**: Learn from past training decisions
+- **Missed Opportunities**: Identify when you should have adjusted weights
+
+### Comprehensive Trends
+- **Fitness Trajectory**: Overall progress direction and rate
+- **Volume Analysis**: Weekly training volume trends
+- **Strength Progression**: kg/week progression rates per exercise
+- **Peak Performance**: Distance from personal bests
+
+### Smart Recommendations
+- **Next Session Weights**: Specific weight adjustments per exercise
+- **Training Focus**: Based on plateau detection and progression patterns
+- **Recovery Insights**: Volume and frequency analysis
+
+## 🎯 Example Output
+
+```
+⭐ SESSION QUALITY ASSESSMENT
+🎯 Overall Grade: A- (87/100)
+📝 Assessment: Great session with solid progression
+💪 Progression: 3 progressed, 2 maintained, 0 regressed
+
+📈 EXERCISE PROGRESSION ANALYSIS
+Bench Press: 80kg×8 → 82.5kg×7 → 85kg×6 (📈 +6.3%)
+Squat: 100kg×10 → 100kg×9 → 102.5kg×8 (📈 +2.5%)
+
+💡 NEXT SESSION RECOMMENDATIONS
+🔧 Weight Adjustments Needed:
+• Bench Press: increase to ~87.5kg next time (RPE 7.2 too low)
+• Squat: maintain 102.5kg (perfect intensity)
+```
+
+## 🔧 Advanced Usage
+
+### Command Line Options
+```bash
+# Fetch only (no analysis)
+python hevy_stats.py fetch --days 60
+
+# Analyze existing data
+python hevy_stats.py analyze --infile my_data.json
+
+# Save to CSV
+python hevy_stats.py both --save-csv
+
+# Email with custom file
+python hevy_stats.py analyze --infile old_data.json --email
+```
+
+### Customization
+- **Rep Targets**: Edit `rep_rules.py` to set target rep ranges per exercise
+- **RPE Guidelines**: Modify `RPE_GUIDELINES` in the script
+- **Excluded Exercises**: Update `EXCLUDED_EXERCISES` list for cardio/warm-ups
+
+## 🛠️ Setup for Other Users
+
+This tool is designed to be easily shared! Here's how others can use it:
+
+### For Individual Use
+1. **Clone/download** this repository
+2. **Set up your API key** and email credentials
+3. **Run locally** or set up GitHub Actions automation
+
+### For Sharing
+1. **Fork the repository** to your GitHub account
+2. **Share the fork** with others
+3. **Each user sets their own secrets** in their fork
+4. **Everyone gets personalized reports** without sharing data
+
+### Privacy Considerations
+- **Workout data stays private** - each user's data only goes to their email
+- **API keys are personal** - each user needs their own Hevy API key
+- **Email credentials are separate** - no shared email accounts needed
+
+## 📱 Alternative Notifications
+
+Beyond email, you can set up:
+- **Slack notifications** via webhooks
+- **Discord messages** for community sharing
+- **Telegram bots** for mobile notifications
+- **Local notifications** on your computer
+
+See [NOTIFICATIONS.md](NOTIFICATIONS.md) for setup instructions.
+
+## 🤝 Contributing
+
+Contributions welcome! Areas for improvement:
+- Additional exercise analysis algorithms
+- New notification methods
+- UI improvements
+- Performance optimizations
+
+## 📄 License
+
+MIT License - feel free to use, modify, and share!
+
+---
+
+**💡 Pro Tip**: Start with manual reports to understand the analysis, then set up automation for daily insights. The tool learns your patterns and gets more accurate over time! 

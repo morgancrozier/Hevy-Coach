@@ -1,0 +1,62 @@
+name: 🏋️‍♂️ Daily Hevy Coaching Report
+
+on:
+  schedule:
+    # Run every day at 8:00 AM UTC (adjust timezone as needed)
+    # This is 3:00 AM EST / 12:00 AM PST - adjust for your timezone
+    - cron: '0 8 * * *'
+  
+  # Allow manual triggering from GitHub UI
+  workflow_dispatch:
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔄 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pandas tabulate python-dotenv
+    
+    - name: 🏋️‍♂️ Generate Hevy Report
+      env:
+        HEVY_API_KEY: ${{ secrets.HEVY_API_KEY }}
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      run: |
+        echo "🚀 Starting Hevy analysis..."
+        python hevy_stats.py both --email
+        echo "✅ Report generation completed!"
+    
+    - name: 📁 Upload report artifacts
+      uses: actions/upload-artifact@v3
+      if: always()  # Upload even if email fails
+      with:
+        name: hevy-reports-${{ github.run_number }}
+        path: |
+          hevy_coaching_report_*.md
+          hevy_workouts_export_*.csv
+          hevy_automation.log
+        retention-days: 30
+    
+    - name: 📊 Report Status
+      if: always()
+      run: |
+        echo "📋 Workflow completed!"
+        echo "📧 Check your email for the coaching report"
+        echo "📁 Report files are also available in workflow artifacts"
+        
+        # Show a summary of what was generated
+        ls -la *.md *.csv 2>/dev/null || echo "No report files found" 
