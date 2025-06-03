@@ -13,6 +13,11 @@ on:
   # Allow manual triggering from GitHub UI
   workflow_dispatch:
 
+# Add permissions for the workflow to write to the repository
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   check-and-report:
     runs-on: ubuntu-latest
@@ -20,6 +25,10 @@ jobs:
     steps:
     - name: 🔄 Checkout code
       uses: actions/checkout@v4
+      with:
+        # Use a token with write permissions
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
     
     - name: 🐍 Set up Python
       uses: actions/setup-python@v4
@@ -158,21 +167,32 @@ jobs:
     
     - name: 💾 Commit state file
       if: steps.check_workouts.outputs.generate_report == 'true'
+      continue-on-error: true  # Don't fail the entire workflow if git push fails
       run: |
-        # Configure git
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        # Configure git with proper user information
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
         
         # Add and commit state file if it exists and has changes
         if [ -f "last_processed_state.json" ]; then
+          echo "📝 Checking for changes in state file..."
           git add last_processed_state.json
+          
           if ! git diff --staged --quiet; then
+            echo "💾 Committing state file changes..."
             git commit -m "🤖 Update last processed workout state [skip ci]"
-            git push
-            echo "💾 State file updated in repository"
+            
+            echo "🔄 Pushing changes to repository..."
+            git push origin HEAD:main || {
+              echo "⚠️ Failed to push state file - continuing anyway"
+              echo "This is not critical, the report was still generated successfully"
+            }
+            echo "✅ State file updated in repository"
           else
-            echo "📝 State file unchanged"
+            echo "📝 State file unchanged, no commit needed"
           fi
+        else
+          echo "📝 No state file found"
         fi
     
     - name: 📊 Report Status
