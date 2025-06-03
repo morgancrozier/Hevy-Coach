@@ -41,7 +41,7 @@ jobs:
         echo "✅ Report generation completed!"
     
     - name: 📁 Upload report artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()  # Upload even if email fails
       with:
         name: hevy-reports-${{ github.run_number }}
