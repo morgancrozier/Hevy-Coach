@@ -28,6 +28,23 @@ except ImportError:
     # dotenv not installed, skip
     pass
 
+# OpenAI integration for AI-powered insights
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+    
+    # Set up OpenAI client
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if openai_api_key:
+        openai_client = OpenAI(api_key=openai_api_key)
+    else:
+        OPENAI_AVAILABLE = False
+        openai_client = None
+except ImportError:
+    OPENAI_AVAILABLE = False
+    openai_api_key = None
+    openai_client = None
+
 # RPE-based coaching guidelines
 RPE_GUIDELINES = {
     "increase_threshold": 7.5,     # If RPE below this, suggest weight increase
@@ -35,6 +52,438 @@ RPE_GUIDELINES = {
     "increase_factor": 1.05,       # 5% weight increase
     "decrease_factor": 0.95,       # 5% weight decrease
 }
+
+def is_assisted_exercise(exercise_name: str) -> bool:
+    """
+    Check if an exercise is an assisted exercise where higher weight = easier.
+    
+    Args:
+        exercise_name: Name of the exercise
+        
+    Returns:
+        True if this is an assisted exercise
+    """
+    assisted_keywords = [
+        "assisted", "assist", "band assisted", "machine assisted",
+        "counterweight", "counter weight", "help", "support"
+    ]
+    
+    exercise_lower = exercise_name.lower()
+    return any(keyword in exercise_lower for keyword in assisted_keywords)
+
+class AICoach:
+    """AI-powered coaching insights using GPT-4o-mini."""
+    
+    def __init__(self):
+        self.available = OPENAI_AVAILABLE and openai_api_key and openai_client is not None
+        self.model = "gpt-4o-mini"  # Cost-effective model for coaching insights
+        
+    def is_available(self) -> bool:
+        """Check if AI coaching is available."""
+        return self.available
+    
+    def generate_session_summary(self, session_quality: Dict, last_session: Dict, 
+                                comprehensive_trends: Dict, user_context: Dict = None) -> str:
+        """
+        Generate an AI-powered, personalized session summary.
+        
+        Args:
+            session_quality: Session quality metrics
+            last_session: Last session data
+            comprehensive_trends: Overall progress trends
+            user_context: Optional user profile/preferences
+            
+        Returns:
+            Personalized coaching summary string
+        """
+        if not self.available:
+            return None
+            
+        try:
+            # Prepare structured data for AI analysis
+            session_data = {
+                "grade": session_quality.get("grade", "Unknown"),
+                "overall_score": session_quality.get("overall_score", 0),
+                "description": session_quality.get("description", ""),
+                "progressed": session_quality.get("progressed", 0),
+                "smart_adjustments": session_quality.get("smart_adjustments", 0),
+                "regressed": session_quality.get("regressed", 0)
+            }
+            
+            # Count adjustments needed
+            adjustments_needed = 0
+            priority_exercises = []
+            if last_session and last_session.get("exercises"):
+                for ex in last_session["exercises"]:
+                    if ex["verdict"] in ["⬇️ too heavy", "⬆️ too light"]:
+                        adjustments_needed += 1
+                        peak_rpe = ex.get("peak_rpe", 8.0)
+                        if peak_rpe:
+                            priority = abs(peak_rpe - 8.5)  # Distance from ideal RPE
+                            priority_exercises.append((priority, ex["name"], ex["verdict"]))
+                
+                priority_exercises.sort(reverse=True)  # Highest priority first
+            
+            # Overall progress context
+            progress_data = {
+                "trajectory": comprehensive_trends.get("fitness_trajectory", "Unknown"),
+                "avg_rate": comprehensive_trends.get("avg_progression_rate", 0),
+                "frequency": comprehensive_trends.get("training_frequency", 0)
+            }
+            
+            # Create coaching prompt
+            prompt = f"""You are an expert strength coach providing personalized feedback. Analyze this workout session and provide encouraging, actionable insights.
+
+SESSION METRICS:
+- Grade: {session_data['grade']} ({session_data['overall_score']:.0f}/100)
+- Progress: {session_data['progressed']} exercises progressed, {session_data['smart_adjustments']} smart adjustments, {session_data['regressed']} regressed
+- Adjustments needed: {adjustments_needed} exercises need weight changes
+
+OVERALL PROGRESS:
+- Trajectory: {progress_data['trajectory']}
+- Average progression: {progress_data['avg_rate']:+.1f}kg/week
+- Training frequency: {progress_data['frequency']:.1f} sessions/week
+
+TOP PRIORITY EXERCISE:
+{priority_exercises[0][1] if priority_exercises else "None"}: {priority_exercises[0][2] if priority_exercises else "All exercises optimal"}
+
+COACHING STYLE:
+- Be encouraging but honest
+- Use 2-3 sentences maximum
+- Focus on the most important takeaway
+- Use motivational language but stay technical
+- Include specific next steps
+- Use fitness emojis sparingly (1-2 max)
+
+Provide a personalized summary that feels like it's from an experienced coach who knows the athlete."""
+
+            # Call OpenAI API
+            response = openai_client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "system",
+                    "content": "You are an expert strength coach with 10+ years of experience. You provide personalized, encouraging feedback that motivates athletes while keeping them focused on proper progression."
+                }, {
+                    "role": "user", 
+                    "content": prompt
+                }],
+                max_tokens=120,  # Keep it concise
+                temperature=0.7,  # Some creativity but stay factual
+                top_p=0.9
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"⚠️ AI coaching unavailable: {e}")
+            return None
+    
+    def generate_next_session_focus(self, last_session: Dict, progression_data: Dict) -> str:
+        """Generate AI-powered focus points for the next session."""
+        if not self.available or not last_session:
+            return None
+            
+        try:
+            # Analyze exercise-specific challenges
+            challenging_exercises = []
+            form_focus_exercises = []
+            confidence_builders = []
+            
+            for ex in last_session.get("exercises", []):
+                peak_rpe = ex.get("peak_rpe")
+                verdict = ex.get("verdict", "")
+                
+                if peak_rpe and peak_rpe >= 9.5:
+                    challenging_exercises.append(ex["name"])
+                elif peak_rpe and peak_rpe <= 7.0:
+                    confidence_builders.append(ex["name"])
+                elif verdict == "⬇️ too heavy":
+                    form_focus_exercises.append(ex["name"])
+            
+            prompt = f"""As a strength coach, provide 1-2 specific focus points for the next training session.
+
+CURRENT SESSION ANALYSIS:
+- Challenging exercises (RPE 9.5+): {', '.join(challenging_exercises[:2]) if challenging_exercises else 'None'}
+- Form focus needed: {', '.join(form_focus_exercises[:2]) if form_focus_exercises else 'None'}  
+- Confidence builders (RPE ≤7): {', '.join(confidence_builders[:2]) if confidence_builders else 'None'}
+
+Give practical, specific advice for the next session. Keep it to 1-2 actionable focus points maximum."""
+
+            response = openai_client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "system",
+                    "content": "You are a practical strength coach. Give specific, actionable advice."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }],
+                max_tokens=80,
+                temperature=0.6
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"⚠️ AI focus generation unavailable: {e}")
+            return None
+
+    def generate_exercise_insights(self, exercise_data: List[Dict], progression_data: Dict) -> Dict:
+        """Generate AI insights for specific exercises that need attention."""
+        if not self.available or not exercise_data:
+            return {}
+            
+        try:
+            # Focus on exercises that need adjustments or have interesting patterns
+            priority_exercises = []
+            
+            for ex in exercise_data[:8]:  # Top 8 exercises
+                exercise_name = ex["name"]
+                verdict = ex.get("verdict", "")
+                peak_rpe = ex.get("peak_rpe")
+                
+                # Add exercises that need attention
+                if verdict in ["⬇️ too heavy", "⬆️ too light"]:
+                    priority_exercises.append({
+                        "name": exercise_name,
+                        "verdict": verdict,
+                        "rpe": peak_rpe,
+                        "weight": ex.get("avg_weight", 0),
+                        "reps": ex.get("avg_reps", 0)
+                    })
+            
+            if not priority_exercises:
+                return {}
+            
+            # Create prompt for exercise-specific insights
+            exercise_lines = []
+            for ex in priority_exercises[:3]:
+                rpe_str = f"{ex['rpe']:.1f}" if ex['rpe'] is not None else "N/A"
+                exercise_lines.append(f"- {ex['name']}: {ex['verdict']}, RPE {rpe_str}, {ex['weight']:.1f}kg×{ex['reps']:.1f}")
+            exercise_list = "\n".join(exercise_lines)
+            
+            prompt = f"""As a strength coach, provide brief, specific insights for these exercises that need attention:
+
+{exercise_list}
+
+For each exercise, give ONE practical tip focusing on:
+- Why this happened (RPE context, technique, programming)
+- What to do next session
+- Keep each tip to 1 sentence maximum
+
+Format: "Exercise: insight"
+Example: "Bench Press: RPE 9.5+ indicates weight too high - focus on controlled reps with 5kg less next session"
+"""
+
+            response = openai_client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "system",
+                    "content": "You are a technical strength coach. Provide specific, actionable exercise advice."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }],
+                max_tokens=150,
+                temperature=0.5
+            )
+            
+            # Parse the response into a dictionary
+            insights = {}
+            response_text = response.choices[0].message.content.strip()
+            
+            for line in response_text.split('\n'):
+                if ':' in line and any(ex['name'] in line for ex in priority_exercises):
+                    # Try to match exercise name
+                    for ex in priority_exercises:
+                        if ex['name'] in line:
+                            insight = line.split(':', 1)[1].strip()
+                            insights[ex['name']] = insight
+                            break
+            
+            return insights
+            
+        except Exception as e:
+            print(f"⚠️ AI exercise insights unavailable: {e}")
+            return {}
+
+    def generate_trend_analysis(self, comprehensive_trends: Dict, periodization: Dict) -> str:
+        """Generate AI analysis of overall trends and patterns."""
+        if not self.available:
+            return None
+            
+        try:
+            # Extract key trend data
+            trajectory = comprehensive_trends.get("fitness_trajectory", "Unknown")
+            avg_progression = comprehensive_trends.get("avg_progression_rate", 0)
+            frequency = comprehensive_trends.get("training_frequency", 0)
+            program_status = periodization.get("program_status", "Unknown")
+            plateau_pct = periodization.get("plateau_percentage", 0)
+            
+            # Count exercise categories
+            progressing = len(periodization.get("progressing_exercises", []))
+            plateaued = len(periodization.get("plateaued_exercises", []))
+            smart_adjustments = len(periodization.get("smart_adjustments", []))
+            
+            prompt = f"""As an experienced strength coach, analyze these training trends and provide strategic insights:
+
+OVERALL TRENDS:
+- Trajectory: {trajectory}
+- Average progression: {avg_progression:+.1f}kg/week
+- Training frequency: {frequency:.1f} sessions/week
+- Program status: {program_status}
+- Plateau rate: {plateau_pct:.0f}%
+
+EXERCISE BREAKDOWN:
+- Progressing: {progressing} exercises
+- Plateaued: {plateaued} exercises  
+- Smart adjustments: {smart_adjustments} exercises
+
+Provide 2-3 strategic insights about:
+1. What these trends reveal about training effectiveness
+2. One key recommendation for program optimization
+3. Any warning signs or positive indicators to note
+
+Keep response to 2-3 sentences maximum. Be specific and actionable."""
+
+            response = openai_client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "system",
+                    "content": "You are a strategic strength coach who analyzes training patterns to optimize long-term progress."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }],
+                max_tokens=120,
+                temperature=0.6
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"⚠️ AI trend analysis unavailable: {e}")
+            return None
+
+    def generate_next_day_overview(self, last_session: Dict, next_workout_info: Dict, 
+                                 comprehensive_trends: Dict, volume_recovery: Dict) -> str:
+        """Generate comprehensive AI overview and recommendations for the next day."""
+        if not self.available:
+            return None
+            
+        try:
+            # Determine next session type
+            next_workout = next_workout_info.get("workout_name", "Unknown")
+            is_rest_day = next_workout_info.get("is_rest_day", False)
+            days_since_last = volume_recovery.get("days_since_last", 0)
+            recovery_status = volume_recovery.get("recovery_status", "Unknown")
+            
+            # Get adjustment count
+            adjustments_needed = 0
+            if last_session and last_session.get("exercises"):
+                for ex in last_session["exercises"]:
+                    if ex["verdict"] in ["⬇️ too heavy", "⬆️ too light"]:
+                        adjustments_needed += 1
+            
+            # Overall trajectory
+            trajectory = comprehensive_trends.get("fitness_trajectory", "Unknown")
+            avg_progression = comprehensive_trends.get("avg_progression_rate", 0)
+            
+            if is_rest_day:
+                prompt = f"""As a recovery specialist coach, provide a comprehensive rest day plan:
+
+RECOVERY CONTEXT:
+- Last session grade: {last_session.get('workout_title', 'Unknown') if last_session else 'No recent session'}
+- Days since last workout: {days_since_last}
+- Recovery status: {recovery_status}
+- Overall progress: {trajectory} ({avg_progression:+.1f}kg/week)
+
+Create a strategic rest day plan covering:
+1. Recovery priorities (sleep, nutrition, mobility)
+2. Light activity recommendations
+3. Mental preparation for next training session
+
+Keep to 3-4 actionable points. Be specific and encouraging."""
+            else:
+                prompt = f"""As a workout planning coach, create a comprehensive next session strategy:
+
+NEXT SESSION INFO:
+- Workout: {next_workout}
+- Adjustments needed: {adjustments_needed} exercises from last session
+- Recovery status: {recovery_status}
+- Overall progress: {trajectory} ({avg_progression:+.1f}kg/week)
+
+Create a strategic training day plan covering:
+1. Pre-workout preparation (warm-up focus, mindset)
+2. Key execution priorities (RPE targets, form cues)
+3. Post-workout optimization (cool-down, recovery)
+
+Keep to 3-4 actionable points. Be specific and motivational."""
+
+            response = openai_client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "system",
+                    "content": "You are a comprehensive strength coach who plans optimal training and recovery strategies."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }],
+                max_tokens=180,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"⚠️ AI next day overview unavailable: {e}")
+            return None
+
+    def generate_recovery_insights(self, volume_recovery: Dict, comprehensive_trends: Dict) -> str:
+        """Generate AI insights for recovery and preparation."""
+        if not self.available:
+            return None
+            
+        try:
+            # Extract recovery data
+            days_since_last = volume_recovery.get("days_since_last", 0)
+            frequency = comprehensive_trends.get("training_frequency", 0)
+            volume_trend = volume_recovery.get("volume_trend", "stable")
+            recovery_status = volume_recovery.get("recovery_status", "Unknown")
+            
+            prompt = f"""As a recovery specialist, analyze this training pattern and provide recovery insights:
+
+RECOVERY METRICS:
+- Days since last session: {days_since_last}
+- Training frequency: {frequency:.1f} sessions/week
+- Volume trend: {volume_trend}
+- Recovery status: {recovery_status}
+
+Provide 1-2 specific recovery recommendations focusing on:
+- Sleep/nutrition priorities
+- Active recovery suggestions
+- Signs to watch for overtraining/underrecovery
+
+Keep concise and actionable (2 sentences max)."""
+
+            response = openai_client.chat.completions.create(
+                model=self.model,
+                messages=[{
+                    "role": "system",
+                    "content": "You are a recovery specialist coach focused on optimizing training adaptations through smart recovery."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }],
+                max_tokens=100,
+                temperature=0.6
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"⚠️ AI recovery insights unavailable: {e}")
+            return None
 
 # Import routine configuration
 try:
@@ -245,23 +694,46 @@ class WorkoutCycle:
             "reasoning": ""
         }
         
+        # Check if this is an assisted exercise (weight = assistance, higher = easier)
+        is_assisted = is_assisted_exercise(exercise_name)
+        
         # RPE-based recommendations
         if last_rpe < 7.5:
-            # Too easy - increase weight
-            suggested_increase = max(2.5, last_weight * 0.025)  # At least 2.5kg or 2.5% increase
-            recommendation.update({
-                "action": "increase",
-                "suggested_weight": last_weight + suggested_increase,
-                "reasoning": f"RPE {last_rpe} indicates room for progression (+{suggested_increase:.1f}kg)"
-            })
+            # Too easy - need to make it harder
+            if is_assisted:
+                # For assisted exercises: decrease assistance weight to make it harder
+                suggested_decrease = max(2.5, last_weight * 0.025)  # At least 2.5kg or 2.5% decrease
+                recommendation.update({
+                    "action": "decrease",
+                    "suggested_weight": max(0, last_weight - suggested_decrease),
+                    "reasoning": f"RPE {last_rpe} too low, reduce assistance by {suggested_decrease:.1f}kg to make it harder"
+                })
+            else:
+                # For regular exercises: increase load weight
+                suggested_increase = max(2.5, last_weight * 0.025)  # At least 2.5kg or 2.5% increase
+                recommendation.update({
+                    "action": "increase",
+                    "suggested_weight": last_weight + suggested_increase,
+                    "reasoning": f"RPE {last_rpe} indicates room for progression (+{suggested_increase:.1f}kg)"
+                })
         elif last_rpe > 9.0:
-            # Too hard - decrease weight
-            suggested_decrease = max(2.5, last_weight * 0.05)  # At least 2.5kg or 5% decrease
-            recommendation.update({
-                "action": "decrease", 
-                "suggested_weight": max(0, last_weight - suggested_decrease),
-                "reasoning": f"RPE {last_rpe} too high, reduce by {suggested_decrease:.1f}kg for better form"
-            })
+            # Too hard - need to make it easier
+            if is_assisted:
+                # For assisted exercises: increase assistance weight to make it easier
+                suggested_increase = max(2.5, last_weight * 0.05)  # At least 2.5kg or 5% increase
+                recommendation.update({
+                    "action": "increase",
+                    "suggested_weight": last_weight + suggested_increase,
+                    "reasoning": f"RPE {last_rpe} too high, increase assistance by {suggested_increase:.1f}kg for better form"
+                })
+            else:
+                # For regular exercises: decrease load weight
+                suggested_decrease = max(2.5, last_weight * 0.05)  # At least 2.5kg or 5% decrease
+                recommendation.update({
+                    "action": "decrease", 
+                    "suggested_weight": max(0, last_weight - suggested_decrease),
+                    "reasoning": f"RPE {last_rpe} too high, reduce by {suggested_decrease:.1f}kg for better form"
+                })
         else:
             recommendation["reasoning"] = f"RPE {last_rpe} is in good range - maintain current weight"
         
@@ -1218,6 +1690,9 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
         peak_rpe = max(rpe_values) if rpe_values else None
         final_rpe = rpe_values[-1] if rpe_values else None
         
+        # Check if this is an assisted exercise (weight = assistance, higher = easier)
+        is_assisted = is_assisted_exercise(exercise)
+        
         # Determine verdict for this session - prioritize RPE over rep ranges
         if rep_range is None or rep_range[0] is None:
             verdict = "❓ no target"
@@ -1227,12 +1702,24 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
             if peak_rpe and not pd.isna(peak_rpe):
                 if peak_rpe >= 9.5:
                     verdict = "⬇️ too heavy"
-                    new_weight = get_realistic_weight_recommendation(avg_weight, 0.95, sets_data)
-                    suggestion = f"reduce to {new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too high)"
+                    if is_assisted:
+                        # For assisted exercises: increase assistance to make it easier
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
+                        suggestion = f"increase assistance to {new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too high)"
+                    else:
+                        # For regular exercises: decrease load
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 0.95, sets_data)
+                        suggestion = f"reduce to {new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too high)"
                 elif peak_rpe <= 7.0:
                     verdict = "⬆️ too light"
-                    new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
-                    suggestion = f"increase to {new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too low)"
+                    if is_assisted:
+                        # For assisted exercises: decrease assistance to make it harder
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 0.95, sets_data)
+                        suggestion = f"reduce assistance to {new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too low)"
+                    else:
+                        # For regular exercises: increase load
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
+                        suggestion = f"increase to {new_weight:.1f}kg next time (peak RPE {peak_rpe:.1f} too low)"
                 elif final_rpe and final_rpe >= 9.0:
                     # Final set at RPE 9+ means good progression to failure
                     verdict = "✅ optimal"
@@ -1244,12 +1731,24 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
                     # Fall back to rep-based analysis with RPE adjustment
                     if avg_reps < rep_range[0]:
                         verdict = "⬇️ too heavy"
-                        new_weight = get_realistic_weight_recommendation(avg_weight, 0.90, sets_data)
-                        suggestion = f"reduce to {new_weight:.1f}kg next time"
+                        if is_assisted:
+                            # For assisted exercises: increase assistance to make it easier
+                            new_weight = get_realistic_weight_recommendation(avg_weight, 1.10, sets_data)
+                            suggestion = f"increase assistance to {new_weight:.1f}kg next time"
+                        else:
+                            # For regular exercises: decrease load
+                            new_weight = get_realistic_weight_recommendation(avg_weight, 0.90, sets_data)
+                            suggestion = f"reduce to {new_weight:.1f}kg next time"
                     elif avg_reps > rep_range[1]:
                         verdict = "⬆️ too light"
-                        new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
-                        suggestion = f"increase to {new_weight:.1f}kg next time"
+                        if is_assisted:
+                            # For assisted exercises: decrease assistance to make it harder
+                            new_weight = get_realistic_weight_recommendation(avg_weight, 0.95, sets_data)
+                            suggestion = f"reduce assistance to {new_weight:.1f}kg next time"
+                        else:
+                            # For regular exercises: increase load
+                            new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
+                            suggestion = f"increase to {new_weight:.1f}kg next time"
                     else:
                         verdict = "✅ in range"
                         suggestion = "maintain this weight (good RPE and reps)"
@@ -1257,12 +1756,24 @@ def get_last_session_only(df: pd.DataFrame) -> Dict:
                 # No RPE data, fall back to rep-based analysis only
                 if avg_reps < rep_range[0]:
                     verdict = "⬇️ too heavy"
-                    new_weight = get_realistic_weight_recommendation(avg_weight, 0.90, sets_data)
-                    suggestion = f"reduce to {new_weight:.1f}kg next time"
+                    if is_assisted:
+                        # For assisted exercises: increase assistance to make it easier
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 1.10, sets_data)
+                        suggestion = f"increase assistance to {new_weight:.1f}kg next time"
+                    else:
+                        # For regular exercises: decrease load
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 0.90, sets_data)
+                        suggestion = f"reduce to {new_weight:.1f}kg next time"
                 elif avg_reps > rep_range[1]:
                     verdict = "⬆️ too light"
-                    new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
-                    suggestion = f"increase to {new_weight:.1f}kg next time"
+                    if is_assisted:
+                        # For assisted exercises: decrease assistance to make it harder
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 0.90, sets_data)
+                        suggestion = f"reduce assistance to {new_weight:.1f}kg next time"
+                    else:
+                        # For regular exercises: increase load
+                        new_weight = get_realistic_weight_recommendation(avg_weight, 1.05, sets_data)
+                        suggestion = f"increase to {new_weight:.1f}kg next time"
                 else:
                     verdict = "✅ in range"
                     suggestion = "maintain this weight (no RPE data)"
@@ -1302,6 +1813,9 @@ def print_comprehensive_report(df: pd.DataFrame):
         print("❌ No workout data found for analysis")
         return
     
+    # Initialize AI coach
+    ai_coach = AICoach()
+    
     # Calculate all the new metrics
     progression_data = get_exercise_progression(df)
     last_session = get_last_session_only(df)
@@ -1311,9 +1825,61 @@ def print_comprehensive_report(df: pd.DataFrame):
     exercise_evolution = analyze_exercise_evolution(df)
     comprehensive_trends = get_comprehensive_trends(df)
     
-    # ========================
-    # 1. SESSION QUALITY SCORE
-    # ========================
+    # Get cyclical routine information for AI context
+    next_workout_info = {}
+    if api_key := os.getenv("HEVY_API_KEY"):
+        workout_cycle = WorkoutCycle(api_key)
+        if workout_cycle.is_available():
+            next_workout_info = workout_cycle.get_next_workout_info(df)
+    
+    # 🚀 QUICK SUMMARY - Mobile-friendly, action-focused
+    print("\n" + "🚀 QUICK SUMMARY".center(80))
+    print("=" * 80)
+    
+    if last_session:
+        session_date = last_session.get("date", "Unknown")
+        print(f"📅 **Latest Session**: {session_date}")
+        print(f"📊 **Grade**: {session_quality['grade']} ({session_quality['overall_score']:.0f}/100)")
+        print(f"📈 **Progress**: {session_quality['progressed']} improved, {session_quality['smart_adjustments']} smart adjustments")
+        
+        # AI-Powered Personalized Insights
+        if ai_coach.is_available():
+            print(f"\n🤖 **AI COACH INSIGHTS**:")
+            ai_summary = ai_coach.generate_session_summary(
+                session_quality, last_session, comprehensive_trends
+            )
+            if ai_summary:
+                print(f"   {ai_summary}")
+            
+            ai_focus = ai_coach.generate_next_session_focus(last_session, progression_data)
+            if ai_focus:
+                print(f"\n🎯 **Next Session Focus**:")
+                print(f"   {ai_focus}")
+        
+        # Quick action items (top 3 priority)
+        priority_actions = []
+        if last_session.get("exercises"):
+            for ex in sorted(last_session["exercises"], 
+                           key=lambda x: abs((x.get("peak_rpe") or 8.0) - 8.5), reverse=True)[:3]:
+                if ex["verdict"] in ["⬇️ too heavy", "⬆️ too light"]:
+                    action = f"{ex['name']}: {ex['verdict']}"
+                    if ex.get("suggestion"):
+                        action += f" → {ex['suggestion']}"
+                    priority_actions.append(action)
+        
+        if priority_actions:
+            print(f"\n⚡ **Priority Actions**:")
+            for i, action in enumerate(priority_actions, 1):
+                print(f"   {i}. {action}")
+        
+        # Overall trajectory
+        fitness_trend = comprehensive_trends.get("fitness_trajectory", "Stable")
+        avg_progression = comprehensive_trends.get("avg_progression_rate", 0)
+        print(f"\n📊 **Overall Progress**: {fitness_trend} ({avg_progression:+.1f}kg/week avg)")
+    
+    print("\n" + "="*80)
+    
+    # ⭐ SESSION QUALITY ASSESSMENT
     print("\n⭐ **SESSION QUALITY ASSESSMENT**")
     print("-" * 50)
     
@@ -1323,410 +1889,47 @@ def print_comprehensive_report(df: pd.DataFrame):
         print(f"💪 **Progression**: {session_quality['progressed']} progressed, {session_quality['maintained']} maintained, {session_quality['smart_adjustments']} smart adjustments, {session_quality['regressed']} regressed")
         print(f"🔥 **Intensity Score**: {session_quality['avg_rpe_score']:.0f}/100 (RPE balance)")
         print(f"📈 **Progress Score**: {session_quality['avg_progression_score']:.0f}/100 (weight progression)")
+    else:
+        print("❌ No recent session data available for assessment")
     
-    # ========================
-    # 2. EXERCISE PROGRESSION TRENDS
-    # ========================
-    print(f"\n\n📈 **EXERCISE PROGRESSION ANALYSIS**")
+    # 📈 EXERCISE PROGRESSION ANALYSIS
+    print(f"\n📈 **EXERCISE PROGRESSION ANALYSIS**")
     print("-" * 50)
     
     if progression_data:
-        print("🔍 **Last 3-4 Sessions Per Exercise**:")
-        
-        # Sort by most recent volume for display
-        sorted_exercises = sorted(progression_data.items(), 
-                                key=lambda x: x[1]["sessions"][0]["total_volume"], reverse=True)
-        
-        for exercise, data in sorted_exercises[:8]:  # Show top 8 exercises
+        for exercise, data in list(progression_data.items())[:8]:  # Show top 8 exercises
             sessions = data["sessions"]
-            latest = sessions[0]
-            
-            print(f"\n**{exercise}**")
-            
-            # Show progression across sessions
-            session_strs = []
-            for i, session in enumerate(sessions[:3]):
-                days_ago = (latest["date"] - session["date"]).days
-                age_str = "today" if days_ago == 0 else f"{days_ago}d ago"
-                session_strs.append(f"{session['avg_weight']:.1f}kg×{session['avg_reps']:.1f} ({age_str})")
-            
-            print(f"   Sessions: {' → '.join(session_strs)}")
-            
-            # Show trend
-            if data["weight_change"] > 0:
-                trend_emoji = "📈"
-                trend_desc = f"+{data['weight_change']:.1f}kg (+{data['weight_change_pct']:.1f}%)"
-            elif data["weight_change"] < 0:
-                trend_emoji = "📉"
-                trend_desc = f"{data['weight_change']:.1f}kg ({data['weight_change_pct']:.1f}%)"
-            else:
-                if data["is_stagnant"]:
-                    trend_emoji = "⚠️"
-                    trend_desc = f"stagnant for {data['sessions_count']} sessions"
-                else:
-                    trend_emoji = "➡️"
-                    trend_desc = "maintained"
-            
-            print(f"   Trend: {trend_emoji} {trend_desc}")
-            
-            # Overall trend across all sessions
-            if len(sessions) >= 3:
-                overall_trend = data["trend_change_pct"]
-                if abs(overall_trend) >= 2:
-                    print(f"   Overall: {overall_trend:+.1f}% over {len(sessions)} sessions")
-    
-    # ========================
-    # 3. COMPREHENSIVE TRENDS & TRAJECTORIES
-    # ========================
-    print(f"\n\n📊 **COMPREHENSIVE TRENDS & TRAJECTORIES**")
-    print("-" * 50)
-    
-    if comprehensive_trends:
-        print(f"🎯 **Overall Fitness Trajectory**: {comprehensive_trends['fitness_trajectory']}")
-        print(f"📝 **Assessment**: {comprehensive_trends['trajectory_desc']}")
-        print(f"📈 **Average Progression Rate**: {comprehensive_trends['avg_progression_rate']:+.1f}kg/week across all exercises")
-        print(f"🏃 **Training Frequency**: {comprehensive_trends['training_frequency']:.1f} sessions/week over {comprehensive_trends['total_days']} days")
-        
-        # Weekly volume trends
-        if len(comprehensive_trends["weekly_stats"]) >= 2:
-            print(f"\n📊 **Weekly Volume Analysis**:")
-            weekly_stats = comprehensive_trends["weekly_stats"]
-            
-            # Check if current week is partial
-            current_week_data = weekly_stats.iloc[-1]
-            is_current_week_partial = current_week_data["days_in_week"] < 3
-            
-            if comprehensive_trends['volume_trend'] == "partial week":
-                print(f"   Volume Trend: Partial week in progress ({current_week_data['days_in_week']:.0f} workout days so far)")
-                print(f"   📊 Too early to assess weekly trend")
-            else:
-                print(f"   Volume Trend: {comprehensive_trends['volume_trend'].title()}")
-                if comprehensive_trends['volume_velocity'] != 0:
-                    print(f"   Volume Velocity: {comprehensive_trends['volume_velocity']:+.0f}kg/week")
-            
-            # Show last 3 weeks with context
-            recent_weeks = weekly_stats.tail(3)
-            for i, (_, week) in enumerate(recent_weeks.iterrows()):
-                week_age = len(recent_weeks) - i - 1
-                age_str = "this week" if week_age == 0 else f"{week_age} week{'s' if week_age > 1 else ''} ago"
-                
-                # Add context for partial week
-                if week_age == 0 and is_current_week_partial:
-                    partial_note = f" - partial week ({week['days_in_week']:.0f} days)"
-                    print(f"   • {age_str}: {week['total_volume']:,.0f}kg total ({week['unique_exercises']:.0f} exercises){partial_note}")
-                else:
-                    print(f"   • {age_str}: {week['total_volume']:,.0f}kg total ({week['unique_exercises']:.0f} exercises)")
-        
-        # Exercise-specific strength trends
-        if comprehensive_trends["exercise_trends"]:
-            print(f"\n💪 **Strength Progression by Exercise** (per week rates):")
-            
-            # Sort by progression rate (best performers first)
-            sorted_trends = sorted(comprehensive_trends["exercise_trends"].items(), 
-                                 key=lambda x: x[1]["weekly_progression_rate"], reverse=True)
-            
-            for exercise, trend_data in sorted_trends[:8]:  # Show top 8
-                rate = trend_data["weekly_progression_rate"]
-                status = trend_data["growth_status"]
-                current_weight = trend_data["current_weight"]
-                peak_weight = trend_data["peak_weight"]
-                
-                # Calculate percentage change from first to current session
-                recent_sessions = trend_data["recent_sessions"]
-                if len(recent_sessions) >= 2:
-                    starting_weight = recent_sessions.iloc[0]["weight"]
-                    total_change_pct = ((current_weight - starting_weight) / starting_weight) * 100 if starting_weight > 0 else 0
-                    days_span = (recent_sessions.iloc[-1]["date"] - recent_sessions.iloc[0]["date"]).days
-                else:
-                    total_change_pct = 0
-                    days_span = 0
-                
-                print(f"\n   **{exercise}**: {status}")
-                print(f"      Rate: {rate:+.1f}kg/week | Total: {total_change_pct:+.1f}% over {days_span} days")
-                print(f"      Weight: {starting_weight:.1f}kg → {current_weight:.1f}kg")
-                
-                # Show recent session progression
-                if len(recent_sessions) >= 2:
-                    session_weights = [f"{row['weight']:.1f}kg" for _, row in recent_sessions.iterrows()]
-                    print(f"      Recent: {' → '.join(session_weights)}")
-        
-        # Peak performance analysis
-        if comprehensive_trends["exercise_peaks"]:
-            print(f"\n🏆 **Peak Performance Analysis**:")
-            
-            # Group by peak status
-            peak_groups = {}
-            for exercise, peak_data in comprehensive_trends["exercise_peaks"].items():
-                status = peak_data["peak_status"]
-                if status not in peak_groups:
-                    peak_groups[status] = []
-                peak_groups[status].append((exercise, peak_data))
-            
-            # Display each group with enhanced categories
-            for status in ["🏆 At Peak", "🎯 Near Peak", "✅ Smart Adjustment", "✅ Smart Deload", "📊 Below Peak", "⚠️ Far from Peak"]:
-                if status in peak_groups:
-                    exercises = peak_groups[status]
-                    print(f"\n   **{status}** ({len(exercises)} exercises):")
-                    
-                    for exercise, peak_data in exercises[:5]:  # Show top 5 per group
-                        assessment = peak_data["peak_assessment"]
-                        print(f"      • **{exercise}**: {assessment}")
-        
-        # Training insights based on trends
-        print(f"\n💡 **Trend-Based Insights**:")
-        
-        avg_rate = comprehensive_trends['avg_progression_rate']
-        if avg_rate > 0.3:
-            print("   • 🚀 Excellent progression rate - current program is highly effective!")
-            print("   • 🎯 Focus: Maintain consistency, monitor for overreaching")
-        elif avg_rate > 0.1:
-            print("   • 📈 Good steady progress - sustainable progression pattern")
-            print("   • 🎯 Focus: Continue current approach, consider small increases in volume")
-        elif avg_rate > -0.1:
-            print("   • 🔄 Maintenance phase - strength is stable")
-            print("   • 🎯 Focus: Add progressive overload or consider program variation")
-        else:
-            print("   • ⚠️ Declining trend detected across multiple exercises")
-            print("   • 🎯 Focus: Review recovery, consider deload week, check nutrition")
-        
-        volume_trend = comprehensive_trends['volume_trend']
-        if "increasing" in volume_trend:
-            print("   • 📊 Volume trending upward - monitor recovery closely")
-        elif "declining" in volume_trend:
-            print("   • 📊 Volume declining - may need motivation boost or program refresh")
-        
-        frequency = comprehensive_trends['training_frequency']
-        if frequency >= 4:
-            print("   • 🏃 High training frequency - excellent consistency!")
-        elif frequency >= 3:
-            print("   • 🏃 Good training frequency - sustainable routine")
-        elif frequency >= 2:
-            print("   • 🏃 Moderate frequency - consider adding 1 more session/week")
-        else:
-            print("   • 🏃 Low frequency - aim for 3+ sessions/week for better results")
-    
-    # ========================
-    # 4. HISTORICAL EXERCISE EVOLUTION
-    # ========================
-    print(f"\n\n🔍 **HISTORICAL EXERCISE EVOLUTION ANALYSIS**")
-    print("-" * 50)
-    
-    if exercise_evolution:
-        print("📚 **Learning from Past Sessions** (what should have happened vs what did happen):")
-        
-        # Sort by efficiency score (worst decisions first to highlight learning opportunities)
-        sorted_evolution = sorted(exercise_evolution.items(), 
-                                key=lambda x: x[1]["efficiency_score"])
-        
-        for exercise, data in sorted_evolution[:6]:  # Show top 6 exercises with most learning potential
-            sessions = data["sessions"]
-            efficiency = data["efficiency_score"]
-            absolute_latest_date = data["absolute_latest_date"]
-            
-            # Get target rep range for context
-            rep_range = REP_RANGE.get(exercise, None)
-            target_info = f" (target: {rep_range[0]}-{rep_range[1]} reps)" if rep_range and rep_range[0] else " (no target set)"
-            
-            print(f"\n**{exercise}**{target_info}")
-            print(f"   Decision Efficiency: {efficiency:.0f}% | Sessions Analyzed: {len(sessions)}")
-            
-            # Show session-by-session analysis with detailed RPE context
-            session_strs = []
-            for session in sessions[:4]:  # Show last 4 sessions
-                days_ago = (absolute_latest_date - session["date"]).days
-                age_str = "today" if days_ago == 0 else f"{days_ago}d ago"
-                
-                # Color code the verdict
-                verdict_emoji = {
-                    "✅ optimal": "✅",
-                    "✅ in range": "✅", 
-                    "⬇️ too heavy": "🔴",
-                    "⬇️ too heavy (RPE)": "🟠",
-                    "⬆️ too light": "🟢",
-                    "⬆️ too light (RPE)": "🟡",
-                    "❓ no target": "❓"
-                }.get(session["verdict"], "❓")
-                
-                # Build detailed session string with RPE context
-                session_str = f"{session['avg_weight']:.1f}kg×{session['avg_reps']:.1f}"
-                
-                # Add RPE information if available
-                if session.get("peak_rpe") and not pd.isna(session["peak_rpe"]):
-                    rpe_str = f"@{session['peak_rpe']:.1f}"
-                    if session.get("final_rpe") and session["final_rpe"] != session["peak_rpe"]:
-                        rpe_str += f"(final:{session['final_rpe']:.1f})"
-                    session_str += rpe_str
-                
-                session_str += f" {verdict_emoji} ({age_str})"
-                session_strs.append(session_str)
-            
-            print(f"   Sessions: {' → '.join(session_strs)}")
-            
-            # Show weight progression between sessions
             if len(sessions) >= 2:
-                print(f"   Weight Changes:")
-                for i in range(len(sessions) - 1):
-                    current = sessions[i]
-                    previous = sessions[i + 1]
-                    weight_change = current["avg_weight"] - previous["avg_weight"]
-                    
-                    curr_days = (absolute_latest_date - current["date"]).days
-                    prev_days = (absolute_latest_date - previous["date"]).days
-                    
-                    curr_str = "today" if curr_days == 0 else f"{curr_days}d ago"
-                    prev_str = "today" if prev_days == 0 else f"{prev_days}d ago"
-                    
-                    if abs(weight_change) >= 0.1:
-                        change_pct = (weight_change / previous["avg_weight"]) * 100 if previous["avg_weight"] > 0 else 0
-                        change_direction = "📈" if weight_change > 0 else "📉"
-                        print(f"     • {prev_str} → {curr_str}: {weight_change:+.1f}kg ({change_pct:+.1f}%) {change_direction}")
-                    else:
-                        print(f"     • {prev_str} → {curr_str}: maintained weight ➡️")
-            
-            # Show detailed missed opportunities with RPE context
-            if data["missed_opportunities"]:
-                print(f"   ⚠️ **Missed Opportunities** ({len(data['missed_opportunities'])} total):")
-                for miss in data["missed_opportunities"][:3]:  # Show top 3 missed opportunities
-                    days_ago = (absolute_latest_date - miss["to_date"]).days
-                    
-                    # Find the session that led to this missed opportunity
-                    prev_session = None
-                    curr_session = None
-                    for i, session in enumerate(sessions):
-                        if session["date"] == miss["to_date"]:
-                            curr_session = session
-                            if i + 1 < len(sessions):
-                                prev_session = sessions[i + 1]
-                            break
-                    
-                    # Create detailed explanation
-                    explanation = miss['missed_opportunity']
-                    if prev_session and curr_session:
-                        # Add detailed RPE and rep context
-                        prev_rpe = prev_session.get("peak_rpe")
-                        curr_rpe = curr_session.get("peak_rpe")
-                        
-                        context_parts = []
-                        
-                        # RPE context
-                        if prev_rpe and not pd.isna(prev_rpe):
-                            if prev_rpe >= 9.5:
-                                context_parts.append(f"previous RPE {prev_rpe:.1f} was too high")
-                            elif prev_rpe <= 7.0:
-                                context_parts.append(f"previous RPE {prev_rpe:.1f} was too low")
-                            elif prev_session["verdict"] == "✅ optimal":
-                                context_parts.append(f"previous session was optimal at RPE {prev_rpe:.1f}")
-                        
-                        # Rep context
-                        if rep_range and rep_range[0]:
-                            prev_reps = prev_session["avg_reps"]
-                            if prev_reps < rep_range[0]:
-                                context_parts.append(f"previous reps {prev_reps:.1f} below target {rep_range[0]}-{rep_range[1]}")
-                            elif prev_reps > rep_range[1]:
-                                context_parts.append(f"previous reps {prev_reps:.1f} above target {rep_range[0]}-{rep_range[1]}")
-                        
-                        if context_parts:
-                            explanation += f" ({', '.join(context_parts)})"
-                    
-                    print(f"     • {days_ago}d ago: {explanation}")
-            
-            # Show good decisions with detailed context
-            if data["good_decisions"]:
-                recent_good = [d for d in data["good_decisions"] if 
-                             (absolute_latest_date - d["to_date"]).days <= 14]  # Show more recent decisions
-                if recent_good:
-                    print(f"   ✅ **Good Decisions** ({len(recent_good)} in last 2 weeks):")
-                    
-                    # Show examples of good decisions with context
-                    for good_example in recent_good[:2]:  # Show top 2 examples
-                        days_ago = (absolute_latest_date - good_example["to_date"]).days
-                        
-                        # Find the sessions involved
-                        for i, session in enumerate(sessions):
-                            if session["date"] == good_example["to_date"]:
-                                curr_session = session
-                                prev_session = sessions[i + 1] if i + 1 < len(sessions) else None
-                                break
-                        
-                        if prev_session and curr_session:
-                            action_desc = {
-                                "increased": "increased weight",
-                                "decreased": "decreased weight", 
-                                "maintained": "maintained weight"
-                            }.get(good_example["action"], good_example["action"])
-                            
-                            weight_change = good_example.get("weight_change", 0)
-                            
-                            # Add context about why it was good
-                            prev_rpe = prev_session.get("peak_rpe")
-                            reasoning = ""
-                            if prev_rpe and not pd.isna(prev_rpe):
-                                if good_example["action"] == "increased" and prev_rpe <= 7.5:
-                                    reasoning = f" (responded to low RPE {prev_rpe:.1f})"
-                                elif good_example["action"] == "decreased" and prev_rpe >= 9.5:
-                                    reasoning = f" (responded to high RPE {prev_rpe:.1f})"
-                                elif good_example["action"] == "maintained" and 7.5 <= prev_rpe <= 9.0:
-                                    reasoning = f" (optimal RPE {prev_rpe:.1f})"
-                            
-                            age_str = "today" if days_ago == 0 else f"{days_ago}d ago"
-                            change_str = f" ({weight_change:+.1f}kg)" if abs(weight_change) >= 0.1 else ""
-                            print(f"     • {age_str}: {action_desc}{change_str}{reasoning}")
-            
-            # Enhanced learning insights based on efficiency and RPE patterns
-            print(f"   💡 **Key Learning**:", end=" ")
-            if efficiency < 30:
-                print(f"Strong focus needed on RPE interpretation - review guidelines below")
-            elif efficiency < 50:
-                print(f"Focus on RPE feedback - aim for peak RPE 8-9 on final sets")
-            elif efficiency < 75:
-                print(f"Good overall, trust your RPE readings more for weight adjustments")
-            else:
-                print(f"Excellent RPE-based decisions - keep listening to your body!")
-            
-            # Add specific recommendations for this exercise
-            if data["missed_opportunities"]:
-                latest_miss = data["missed_opportunities"][0]
-                if "should have increased" in latest_miss["missed_opportunity"]:
-                    print(f"   🎯 **Next Session**: If RPE ≤7.5, increase weight ~2-5%")
-                elif "should have decreased" in latest_miss["missed_opportunity"]:
-                    print(f"   🎯 **Next Session**: If RPE ≥9.5, decrease weight ~2-5%")
-                else:
-                    print(f"   🎯 **Next Session**: Aim for peak RPE 8-9 on final set")
-            else:
-                print(f"   🎯 **Next Session**: Continue current approach - it's working well!")
+                current = sessions[0]
+                previous = sessions[1]
+                
+                # Show progression with trend
+                trend_emoji = "📈" if data["weight_change"] > 0 else "📉" if data["weight_change"] < 0 else "➡️"
+                
+                print(f"**{exercise}**")
+                print(f"   Sessions: {current['avg_weight']:.1f}kg×{current['avg_reps']:.1f} (today) → {previous['avg_weight']:.1f}kg×{previous['avg_reps']:.1f} ({previous['session_ago']}d ago)")
+                print(f"   Trend: {trend_emoji} {data['weight_change']:+.1f}kg ({data['weight_change_pct']:+.1f}%)")
+                
+                if len(sessions) >= 3:
+                    print(f"   Overall: {data['trend_change_pct']:+.1f}% over {data['sessions_count']} sessions")
+                
+                if data["is_stagnant"]:
+                    print(f"   ⚠️ Stagnant for {data['sessions_count']} sessions - consider deload")
+                print()
         
-        # Enhanced overall evolution insights
-        avg_efficiency = sum(data["efficiency_score"] for data in exercise_evolution.values()) / len(exercise_evolution)
-        total_decisions = sum(data["total_decisions"] for data in exercise_evolution.values())
-        total_missed = sum(len(data["missed_opportunities"]) for data in exercise_evolution.values())
-        total_good = sum(len(data["good_decisions"]) for data in exercise_evolution.values())
-        
-        print(f"\n📊 **Overall Decision Quality Summary**:")
-        print(f"• **Average Efficiency**: {avg_efficiency:.0f}% across {len(exercise_evolution)} exercises")
-        print(f"• **Total Decisions**: {total_decisions} | Good: {total_good} | Missed: {total_missed}")
-        print(f"• **Learning Potential**: {total_missed} decisions to optimize")
-        
-        if avg_efficiency >= 80:
-            print(f"• 🌟 **Assessment**: Excellent RPE awareness - you're making great decisions!")
-            print(f"• 🎯 **Focus**: Fine-tune minor details, maintain current approach")
-        elif avg_efficiency >= 65:
-            print(f"• 🎯 **Assessment**: Good decision making - fine-tune RPE interpretation")
-            print(f"• 📈 **Focus**: Pay closer attention to RPE 9+ sessions (reduce weight next time)")
-        else:
-            print(f"• 📚 **Assessment**: Significant learning opportunity with RPE patterns")
-            print(f"• 🔥 **Focus**: RPE 9.5+ = too hard, RPE 7- = too easy")
-        
-        print(f"\n💡 **Complete RPE Decision Guide**:")
-        print(f"• **Peak RPE 6-7**: Too easy → increase weight 2-5% next session")
-        print(f"• **Peak RPE 7.5-8.5**: Perfect intensity → maintain or small increase (+1-2%)")
-        print(f"• **Peak RPE 9-9.5**: Challenging but good → maintain weight, focus on form")
-        print(f"• **Peak RPE 9.5+**: Too hard → decrease weight 2-5% next session")
-        print(f"• **Final set RPE 9+**: Excellent progression to failure - ideal training")
+        # Add AI Exercise Insights
+        if ai_coach.is_available() and last_session and last_session.get("exercises"):
+            exercise_insights = ai_coach.generate_exercise_insights(last_session["exercises"], progression_data)
+            if exercise_insights:
+                print(f"🤖 **AI EXERCISE INSIGHTS**:")
+                for exercise, insight in exercise_insights.items():
+                    print(f"   • **{exercise}**: {insight}")
+                print()
+    else:
+        print("❌ Insufficient data for exercise progression analysis")
     
-    # ========================
-    # 5. PERIODIZATION & PLATEAU DETECTION
-    # ========================
-    print(f"\n\n🎯 **TRAINING PERIODIZATION INSIGHTS**")
+    # 🎯 TRAINING PERIODIZATION INSIGHTS
+    print(f"\n🎯 **TRAINING PERIODIZATION INSIGHTS**")
     print("-" * 50)
     
     if periodization:
@@ -1734,268 +1937,172 @@ def print_comprehensive_report(df: pd.DataFrame):
         print(f"💡 **Recommendation**: {periodization['program_suggestion']}")
         print(f"📈 **Plateau Rate**: {periodization['plateau_percentage']:.0f}% of exercises")
         
-        if periodization["progressing_exercises"]:
-            print(f"\n🚀 **Making Great Progress** ({len(periodization['progressing_exercises'])} exercises):")
-            for ex in periodization["progressing_exercises"][:5]:
-                print(f"• **{ex['name']}**: +{ex['progress_pct']:.1f}% progression")
+        # Add AI Trend Analysis
+        if ai_coach.is_available():
+            ai_trend_analysis = ai_coach.generate_trend_analysis(comprehensive_trends, periodization)
+            if ai_trend_analysis:
+                print(f"\n🤖 **AI TREND ANALYSIS**:")
+                print(f"   {ai_trend_analysis}")
         
-        # Show smart adjustments as a positive category
-        if periodization.get("smart_adjustments"):
-            print(f"\n✅ **Smart RPE-Based Adjustments** ({len(periodization['smart_adjustments'])} exercises):")
-            for ex in periodization["smart_adjustments"][:5]:
-                print(f"• **{ex['name']}**: {ex['decline_pct']:.1f}% decrease (RPE-justified)")
+        if periodization["progressing_exercises"]:
+            print(f"\n✅ **Progressing Exercises** ({len(periodization['progressing_exercises'])}):")
+            for ex in periodization["progressing_exercises"][:5]:
+                print(f"   • {ex['name']}: +{ex['progress_pct']:.1f}%")
+        
+        if periodization["smart_adjustments"]:
+            print(f"\n✅ **Smart Adjustments** ({len(periodization['smart_adjustments'])}):")
+            for ex in periodization["smart_adjustments"][:3]:
+                print(f"   • {ex['name']}: {ex['justification']}")
         
         if periodization["plateaued_exercises"]:
-            print(f"\n⚠️ **Plateaued Exercises** ({len(periodization['plateaued_exercises'])} exercises):")
+            print(f"\n⚠️ **Plateaued Exercises** ({len(periodization['plateaued_exercises'])}):")
             for ex in periodization["plateaued_exercises"][:5]:
-                print(f"• **{ex['name']}**: stagnant for {ex['sessions_stagnant']} sessions")
+                print(f"   • {ex['name']}: {ex['sessions_stagnant']} sessions")
         
         if periodization["deload_candidates"]:
-            print(f"\n🔄 **Consider Deload** ({len(periodization['deload_candidates'])} exercises):")
-            for ex in periodization["deload_candidates"][:3]:
-                print(f"• **{ex}**: reduce weight 10-15% for technique focus")
-        
-        # Only show actual declining performance (not RPE-justified)
-        if periodization["regressing_exercises"]:
-            print(f"\n📉 **Concerning Declines** ({len(periodization['regressing_exercises'])} exercises):")
-            for ex in periodization["regressing_exercises"][:3]:
-                print(f"• **{ex['name']}**: {ex['decline_pct']:.1f}% decline - check form/recovery/nutrition")
+            print(f"\n🔄 **Deload Candidates**: {', '.join(periodization['deload_candidates'][:3])}")
     
-    # ========================
-    # 6. VOLUME & RECOVERY ANALYSIS
-    # ========================
-    print(f"\n\n💪 **VOLUME & RECOVERY INSIGHTS**")
+    # 🔄 CYCLICAL ROUTINE TRACKING
+    if api_key := os.getenv("HEVY_API_KEY"):
+        workout_cycle = WorkoutCycle(api_key)
+        if workout_cycle.is_available():
+            print(f"\n🔄 **CYCLICAL ROUTINE TRACKING**")
+            print("-" * 50)
+            
+            if next_workout_info and "error" not in next_workout_info:
+                print(f"📅 **Next Workout**: {next_workout_info['workout_name']}")
+                print(f"🔢 **Cycle Position**: Day {next_workout_info['cycle_day_index'] + 1}")
+                print(f"📊 **Days Until Repeat**: {next_workout_info['days_until_same_workout']}")
+                
+                if not next_workout_info["is_rest_day"]:
+                    recommendations = workout_cycle.get_routine_specific_recommendations(df, next_workout_info)
+                    if recommendations["type"] == "workout_specific":
+                        exercise_recs = recommendations["exercise_recommendations"]
+                        if exercise_recs:
+                            print(f"\n💡 **Next Session Recommendations**:")
+                            for exercise, rec in list(exercise_recs.items())[:5]:
+                                action_emoji = "⬆️" if rec["action"] == "increase" else "⬇️" if rec["action"] == "decrease" else "✅"
+                                print(f"   {action_emoji} **{exercise}**: {rec['suggested_weight']:.1f}kg ({rec['reasoning']})")
+                else:
+                    print(f"😴 **Rest Day** - Focus on recovery!")
+            else:
+                print("💡 Configure your routine cycle for personalized next-workout recommendations")
+        else:
+            print(f"\n💡 **Cyclical Routine Tracking Available**")
+            print("-" * 50)
+            print("📝 Copy routine_config.example.py to routine_config.py to enable:")
+            print("   • Next workout predictions based on your cycle")
+            print("   • Exercise-specific weight recommendations")
+            print("   • Integration with your Hevy routine templates")
+    
+    # 📊 VOLUME & RECOVERY ANALYSIS
+    print(f"\n📊 **VOLUME & RECOVERY ANALYSIS**")
     print("-" * 50)
     
     if volume_recovery:
-        print(f"📅 **Recovery Status**: {volume_recovery['recovery_status']}")
-        print(f"⏰ **Days Since Last Workout**: {volume_recovery['days_since_last']}")
-        print(f"💤 **Average Rest Between Sessions**: {volume_recovery['avg_rest_days']:.1f} days")
+        print(f"📈 **Volume Trend**: {volume_recovery['volume_trend']} ({volume_recovery['volume_change_pct']:+.1f}%)")
+        print(f"😴 **Recovery Status**: {volume_recovery['recovery_status']}")
+        print(f"📅 **Days Since Last**: {volume_recovery['days_since_last']} days")
+        print(f"⚡ **Training Frequency**: {volume_recovery['avg_rest_days']:.1f} days between sessions")
         
-        if volume_recovery["volume_change_pct"] != 0:
-            trend_emoji = "📈" if volume_recovery["volume_change_pct"] > 0 else "📉"
-            print(f"📊 **Weekly Volume Trend**: {trend_emoji} {volume_recovery['volume_trend']} ({volume_recovery['volume_change_pct']:+.1f}%)")
+        # Add AI Recovery Insights
+        if ai_coach.is_available():
+            ai_recovery = ai_coach.generate_recovery_insights(volume_recovery, comprehensive_trends)
+            if ai_recovery:
+                print(f"\n🤖 **AI RECOVERY INSIGHTS**:")
+                print(f"   {ai_recovery}")
         
         if volume_recovery["muscle_volume"]:
-            print(f"\n🎯 **Volume by Muscle Group**:")
-            sorted_muscles = sorted(volume_recovery["muscle_volume"].items(), key=lambda x: x[1], reverse=True)
-            for muscle, volume in sorted_muscles:
-                print(f"• **{muscle.title()}**: {volume:,.0f}kg total volume")
+            print(f"\n💪 **Muscle Group Volume** (last period):")
+            sorted_muscle_volume = sorted(volume_recovery["muscle_volume"].items(), 
+                                        key=lambda x: x[1], reverse=True)
+            for muscle, volume in sorted_muscle_volume[:5]:
+                print(f"   • {muscle.title()}: {volume:,.0f}kg")
     
-    # ========================
-    # 7. PAST 30 DAYS OVERVIEW (CONDENSED)
-    # ========================
-    print("\n📊 **30-DAY OVERVIEW & TRENDS**")
+    # 🏆 PEAK PERFORMANCE ANALYSIS
+    print(f"\n🏆 **PEAK PERFORMANCE ANALYSIS**")
     print("-" * 50)
     
-    overview = get_30_day_overview(df)
-    if overview:
-        print(f"📅 **Period**: {overview['date_range'][0]} to {overview['date_range'][1]}")
-        print(f"🏃 **Total Workouts**: {overview['total_workouts']}")
-        print(f"💪 **Exercises Trained**: {overview['total_exercises']}")
-        
-        print(f"\n🔥 **Most Frequent Exercises**:")
-        for exercise in overview["top_by_frequency"].index[:3]:
-            row = overview["top_by_frequency"].loc[exercise]
-            print(f"• **{exercise}**: {row['sessions']} sessions")
-        
-        print(f"\n🏋️ **Highest Volume Exercises**:")
-        for exercise in overview["top_by_volume"].index[:3]:
-            row = overview["top_by_volume"].loc[exercise]
-            print(f"• **{exercise}**: {row['total_volume']:,.0f}kg total")
+    exercise_peaks = comprehensive_trends.get("exercise_peaks", {})
+    if exercise_peaks:
+        for exercise, peak_data in list(exercise_peaks.items())[:8]:
+            print(f"**{exercise}**")
+            print(f"   {peak_data['peak_status']}: {peak_data['peak_assessment']}")
+            if peak_data.get("peak_rpe"):
+                print(f"   Peak RPE: {peak_data['peak_rpe']:.1f}")
+            print()
     
-    # ========================
-    # 8. LAST SESSION DEEP DIVE
-    # ========================
-    print(f"\n\n🎯 **LAST SESSION DEEP DIVE**")
+    # 📈 COMPREHENSIVE FITNESS TRENDS  
+    print(f"\n📈 **COMPREHENSIVE FITNESS TRENDS**")
     print("-" * 50)
     
-    if last_session:
-        print(f"📅 **Date**: {last_session['date']}")
-        print(f"🏷️ **Workout**: {last_session['workout_title']}")
-        print(f"💪 **Exercises**: {last_session['total_exercises']}")
-        print(f"📋 **Total Sets**: {last_session['total_sets']}")
+    if comprehensive_trends:
+        print(f"🎯 **Overall Trajectory**: {comprehensive_trends['fitness_trajectory']}")
+        print(f"📝 **Description**: {comprehensive_trends['trajectory_desc']}")
+        print(f"⚡ **Average Progression**: {comprehensive_trends['avg_progression_rate']:+.1f}kg/week")
+        print(f"📊 **Training Frequency**: {comprehensive_trends['training_frequency']:.1f} sessions/week")
+        print(f"📅 **Analysis Period**: {comprehensive_trends['total_days']} days, {comprehensive_trends['total_sessions']} sessions")
         
-        print(f"\n🔍 **Exercise-by-Exercise Breakdown**:")
-        
-        for i, ex in enumerate(last_session["exercises"], 1):
-            # Format set details
-            set_details = []
-            for s in ex["sets"]:
-                if s["weight"] > 0:
-                    rpe_str = f" @{s['rpe']:.1f}" if s["rpe"] and not pd.isna(s["rpe"]) else ""
-                    set_details.append(f"{s['weight']:.1f}kg×{s['reps']}{rpe_str}")
-                else:
-                    set_details.append(f"{s['reps']} reps")
+        # Exercise trends summary
+        exercise_trends = comprehensive_trends.get("exercise_trends", {})
+        if exercise_trends:
+            growth_categories = {}
+            for exercise, data in exercise_trends.items():
+                status = data["growth_status"]
+                if status not in growth_categories:
+                    growth_categories[status] = []
+                growth_categories[status].append(exercise)
             
-            target_str = ""
-            if ex["target_range"] is not None and ex["target_range"][0] is not None:
-                target_str = f" (target: {ex['target_range'][0]}-{ex['target_range'][1]})"
-            
-            print(f"\n**{i}. {ex['name']}**{target_str}")
-            print(f"   Sets: {' | '.join(set_details)}")
-            print(f"   Average: {ex['avg_weight']:.1f}kg × {ex['avg_reps']:.1f} reps")
-            
-            if ex["avg_rpe"] and not pd.isna(ex["avg_rpe"]):
-                rpe_info = f"RPE: {ex['avg_rpe']:.1f}"
-                if ex.get("peak_rpe") and not pd.isna(ex["peak_rpe"]):
-                    rpe_info += f" (peak: {ex['peak_rpe']:.1f})"
-                if ex.get("final_rpe") and not pd.isna(ex["final_rpe"]) and ex["final_rpe"] != ex["peak_rpe"]:
-                    rpe_info += f" (final: {ex['final_rpe']:.1f})"
-                print(f"   {rpe_info}")
-            
-            print(f"   Volume: {ex['total_volume']:,.0f}kg")
-            print(f"   **{ex['verdict']}** → {ex['suggestion']}")
-        
-        # Session summary
-        in_range = sum(1 for ex in last_session["exercises"] if ex["verdict"] == "✅ in range")
-        too_heavy = sum(1 for ex in last_session["exercises"] if ex["verdict"] == "⬇️ too heavy")
-        too_light = sum(1 for ex in last_session["exercises"] if ex["verdict"] == "⬆️ too light")
-        no_target = sum(1 for ex in last_session["exercises"] if ex["verdict"] == "❓ no target")
-        
-        session_score = (in_range / len(last_session["exercises"])) * 100 if last_session["exercises"] else 0
+            print(f"\n📊 **Exercise Growth Summary**:")
+            for status, exercises in growth_categories.items():
+                print(f"   {status}: {len(exercises)} exercises")
+                if len(exercises) <= 3:
+                    print(f"      ({', '.join(exercises)})")
     
-    # ========================
-    # 9. NEXT SESSION RECOMMENDATIONS
-    # ========================
-    print(f"\n\n💡 **NEXT SESSION RECOMMENDATIONS**")
+    # 📋 DECISION QUALITY EVOLUTION
+    print(f"\n📋 **DECISION QUALITY EVOLUTION**")
     print("-" * 50)
     
-    if last_session and last_session["exercises"]:
-        adjustments = []
-        maintains = []
+    if exercise_evolution:
+        total_decisions = sum(data["total_decisions"] for data in exercise_evolution.values())
+        total_good = sum(len(data["good_decisions"]) for data in exercise_evolution.values())
+        total_missed = sum(len(data["missed_opportunities"]) for data in exercise_evolution.values())
         
-        for ex in last_session["exercises"]:
-            if ex["verdict"] == "⬇️ too heavy":
-                adjustments.append(f"• **{ex['name']}**: {ex['suggestion']}")
-            elif ex["verdict"] == "⬆️ too light":
-                adjustments.append(f"• **{ex['name']}**: {ex['suggestion']}")
-            elif ex["verdict"] == "✅ in range":
-                # Check if the suggestion involves a weight change (RPE-based adjustment)
-                if "increase to" in ex["suggestion"] or "reduce to" in ex["suggestion"]:
-                    adjustments.append(f"• **{ex['name']}**: {ex['suggestion']}")
-                else:
-                    maintains.append(f"• **{ex['name']}**: keep {ex['avg_weight']:.1f}kg")
-            else:  # "❓ no target"
-                maintains.append(f"• **{ex['name']}**: {ex['suggestion']}")
-        
-        if adjustments:
-            print("🔧 **Weight Adjustments Needed**:")
-            for adj in adjustments:
-                print(adj)
-        
-        if maintains:
-            print(f"\n✅ **Keep These Weights** (they're working!):")
-            for maint in maintains[:5]:  # Show top 5
-                print(maint)
-        
-        # Smart focus points based on all analysis
-        print(f"\n🎯 **Smart Focus Points**:")
-        
-        if periodization and periodization["plateau_percentage"] > 30:
-            print("• ⚠️ High plateau rate - consider technique review or deload week")
-        elif session_quality and session_quality["grade"] in ["A+", "A"]:
-            print("• 🌟 Excellent session quality - maintain this momentum!")
-        elif session_quality and session_quality["avg_rpe_score"] < 70:
-            print("• 🔥 RPE too low/high - better intensity management needed")
-        
-        if volume_recovery and volume_recovery["days_since_last"] > 4:
-            print("• ⏰ Extended rest period - ease back in gradually")
-        elif volume_recovery and volume_recovery["volume_change_pct"] > 15:
-            print("• 📈 Volume increasing rapidly - monitor recovery closely")
-        
-        print("• 🎯 Aim for RPE 7.5-9 for optimal muscle growth")
-        print("• 💤 Rest 2-3 minutes between sets for compound movements")
-        
-        if periodization and len(periodization["deload_candidates"]) > 0:
-            print("• 🔄 Consider a deload week for stagnant exercises")
-    
-    # ========================
-    # NEW: CYCLICAL ROUTINE TRACKING & NEXT WORKOUT RECOMMENDATIONS
-    # ========================
-    api_key = os.getenv("HEVY_API_KEY")
-    if api_key and ROUTINE_CONFIG_AVAILABLE:
-        try:
-            workout_cycle = WorkoutCycle(api_key)
-            if workout_cycle.is_available():
-                next_workout_info = workout_cycle.get_next_workout_info(df)
-                
-                # Check if we got valid workout info (not an error)
-                if "error" not in next_workout_info:
-                    cycle_recommendations = workout_cycle.get_routine_specific_recommendations(df, next_workout_info)
-                    
-                    print(f"\n\n🔄 **CYCLICAL ROUTINE TRACKING**")
-                    print("-" * 50)
-                    
-                    print(f"📅 **Next Scheduled Workout**: {next_workout_info['workout_name']}")
-                    
-                    if next_workout_info["is_rest_day"]:
-                        print("🛌 **Rest Day Recommendations**:")
-                        for rec in cycle_recommendations["recommendations"]:
-                            print(f"   {rec}")
-                    else:
-                        print(f"⏰ **Cycle Info**: This workout repeats every {next_workout_info['days_until_same_workout']} days")
+        if total_decisions > 0:
+            overall_efficiency = (total_good / total_decisions) * 100
+            print(f"🎯 **Overall Decision Efficiency**: {overall_efficiency:.0f}% ({total_good}/{total_decisions})")
+            print(f"✅ **Good Decisions**: {total_good}")
+            print(f"❌ **Missed Opportunities**: {total_missed}")
+            
+            # Show exercises with most missed opportunities (learning focus)
+            missed_by_exercise = [(exercise, len(data["missed_opportunities"])) 
+                                for exercise, data in exercise_evolution.items()]
+            missed_by_exercise.sort(key=lambda x: x[1], reverse=True)
+            
+            if missed_by_exercise and missed_by_exercise[0][1] > 0:
+                print(f"\n📚 **Learning Focus** (most missed opportunities):")
+                for exercise, missed_count in missed_by_exercise[:3]:
+                    if missed_count > 0:
+                        efficiency = exercise_evolution[exercise]["efficiency_score"]
+                        print(f"   • **{exercise}**: {missed_count} missed, {efficiency:.0f}% efficiency")
                         
-                        if cycle_recommendations["type"] == "workout_specific":
-                            exercise_recs = cycle_recommendations["exercise_recommendations"]
-                            
-                            if exercise_recs:
-                                print(f"\n🎯 **Exercise-Specific Recommendations for {next_workout_info['workout_name']}**:")
-                                
-                                # Group recommendations by action type
-                                increases = []
-                                decreases = []
-                                maintains = []
-                                
-                                for exercise, rec in exercise_recs.items():
-                                    action = rec["action"]
-                                    current_weight = rec["current_weight"]
-                                    suggested_weight = rec["suggested_weight"]
-                                    reasoning = rec["reasoning"]
-                                    
-                                    if action == "increase":
-                                        increases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
-                                    elif action == "decrease":
-                                        decreases.append(f"• **{exercise}**: {current_weight:.1f}kg → {suggested_weight:.1f}kg ({reasoning})")
-                                    else:
-                                        maintains.append(f"• **{exercise}**: Keep {current_weight:.1f}kg ({reasoning})")
-                                
-                                if increases:
-                                    print("\n📈 **Suggested Increases**:")
-                                    for inc in increases:
-                                        print(f"   {inc}")
-                                
-                                if decreases:
-                                    print("\n📉 **Suggested Decreases**:")
-                                    for dec in decreases:
-                                        print(f"   {dec}")
-                                
-                                if maintains:
-                                    print("\n✅ **Maintain Current Weights**:")
-                                    for maint in maintains[:5]:  # Show top 5
-                                        print(f"   {maint}")
-                            
-                            print(f"\n💡 **General Recommendations**:")
-                            for rec in cycle_recommendations["general_recommendations"]:
-                                print(f"   • {rec}")
-                        else:
-                            print("ℹ️ No specific routine data available - using general recommendations")
-            
-        except Exception as e:
-            print(f"\n⚠️ **Cyclical Routine Tracking**: Could not analyze workout cycle ({str(e)})")
-            print("💡 This feature requires routine_config.py and accessible Hevy API data")
-    elif api_key and not ROUTINE_CONFIG_AVAILABLE:
-        # API key available but no routine config - provide setup instructions
-        print(f"\n💡 **Cyclical Routine Tracking Available**")
+                        # Show recent missed opportunity
+                        if exercise_evolution[exercise]["missed_opportunities"]:
+                            recent_miss = exercise_evolution[exercise]["missed_opportunities"][0]
+                            print(f"     Recent: {recent_miss['missed_opportunity']}")
+        else:
+            print("📊 Insufficient session history for decision quality analysis")
+    
+    # 🚀 AI NEXT DAY OVERVIEW - New comprehensive section
+    if ai_coach.is_available() and next_workout_info:
+        print(f"\n🚀 **AI NEXT DAY STRATEGY**")
         print("-" * 50)
-        print("🔧 **Setup Instructions**:")
-        print("   1. Copy: `cp routine_config.example.py routine_config.py`")
-        print("   2. Edit routine_config.py with your workout cycle")
-        print("   3. Run analysis again to get next workout recommendations")
-        print("   📖 See docs/CYCLICAL-ROUTINES.md for detailed setup guide")
-    elif not api_key:
-        # No API key - skip entirely (no mention of cyclical routines)
-        pass  # Skip the section completely
+        
+        ai_next_day = ai_coach.generate_next_day_overview(
+            last_session, next_workout_info, comprehensive_trends, volume_recovery
+        )
+        if ai_next_day:
+            print(f"{ai_next_day}")
     
     print("\n" + "="*80)
 
@@ -2964,10 +3071,122 @@ def get_comprehensive_trends(df: pd.DataFrame) -> Dict:
         "exercise_peaks": exercise_peaks
     }
 
+def validate_setup() -> bool:
+    """
+    Validate user setup and provide helpful feedback.
+    
+    Returns:
+        True if setup is valid, False otherwise
+    """
+    print("🔍 **SETUP VALIDATION**")
+    print("=" * 50)
+    
+    issues_found = []
+    warnings = []
+    
+    # Check API key
+    api_key = os.getenv("HEVY_API_KEY")
+    if not api_key:
+        issues_found.append("❌ HEVY_API_KEY environment variable not set")
+        print("💡 Fix: Add HEVY_API_KEY to your .env file or export it")
+    else:
+        print("✅ API key found")
+        
+        # Test API connection
+        try:
+            client = HevyStatsClient(api_key)
+            test_data = client.get_workout_events(page=1, page_size=1, since=(datetime.now() - timedelta(days=7)).isoformat() + "Z")
+            if test_data and test_data.get("workout_events"):
+                print("✅ API connection successful")
+            else:
+                print("⚠️ API connected but no recent workouts found")
+        except Exception as e:
+            issues_found.append(f"❌ API connection failed: {e}")
+    
+    # Check AI coaching setup
+    print("\n🤖 **AI COACHING SETUP**")
+    if OPENAI_AVAILABLE and openai_api_key:
+        print("✅ OpenAI integration available")
+        
+        # Test AI connection
+        try:
+            ai_coach = AICoach()
+            if ai_coach.is_available():
+                print("✅ AI coaching ready - GPT-4o-mini will provide personalized insights")
+                
+                # Quick test call (minimal cost)
+                test_response = ai_coach.generate_session_summary(
+                    {"grade": "B+", "overall_score": 85, "progressed": 3, "smart_adjustments": 2, "regressed": 0},
+                    {"exercises": [{"name": "Bench Press", "verdict": "✅ optimal", "peak_rpe": 8.5}]},
+                    {"fitness_trajectory": "Improving", "avg_progression_rate": 1.2, "training_frequency": 4.5}
+                )
+                if test_response:
+                    print("✅ AI coaching test successful")
+                    print(f"   Sample insight: \"{test_response[:60]}...\"")
+                else:
+                    warnings.append("⚠️ AI test call failed - check API key and credits")
+            else:
+                warnings.append("⚠️ AI coaching unavailable")
+        except Exception as e:
+            warnings.append(f"⚠️ AI setup issue: {e}")
+    else:
+        print("💡 AI coaching not configured")
+        print("   • Add OPENAI_API_KEY to .env file for personalized insights")
+        print("   • pip install openai")
+        print("   • Cost: ~$0.01-0.05 per report with GPT-4o-mini")
+    
+    # Check rep rules configuration
+    print("\n📏 **REP RULES CONFIGURATION**")
+    try:
+        from rep_rules import REP_RANGE
+        configured_exercises = len(REP_RANGE)
+        print(f"✅ Rep rules configured for {configured_exercises} exercises")
+        
+        # Show sample
+        sample_exercises = list(REP_RANGE.keys())[:3]
+        for ex in sample_exercises:
+            range_info = REP_RANGE[ex]
+            print(f"   • {ex}: {range_info}")
+            
+    except ImportError:
+        warnings.append("⚠️ rep_rules.py not found - create it for exercise-specific targets")
+    
+    # Check routine configuration
+    print("\n🔄 **CYCLICAL ROUTINE CONFIGURATION**")
+    if ROUTINE_CONFIG_AVAILABLE:
+        print("✅ Cyclical routine tracking configured")
+        cycle_length = len(CYCLE_PATTERN) if CYCLE_PATTERN else 0
+        print(f"   • Cycle length: {cycle_length} days")
+        
+        if ROUTINE_TITLE_MAPPING:
+            print(f"   • {len(ROUTINE_TITLE_MAPPING)} routine titles mapped")
+    else:
+        print("💡 Cyclical routine tracking not configured")
+        print("   • Copy routine_config.example.py to routine_config.py")
+        print("   • Customize for your workout split")
+    
+    # Summary
+    print("\n" + "=" * 50)
+    if issues_found:
+        print("❌ **SETUP ISSUES FOUND**:")
+        for issue in issues_found:
+            print(f"   {issue}")
+        print("\n💡 Fix these issues before running analysis")
+        return False
+    else:
+        print("✅ **CORE SETUP COMPLETE**")
+        if warnings:
+            print("\n⚠️ **OPTIONAL ENHANCEMENTS**:")
+            for warning in warnings:
+                print(f"   {warning}")
+        
+        print(f"\n🚀 Ready to run: python hevy_stats.py analyze")
+        return True
+
 def main():
     parser = argparse.ArgumentParser(description="Hevy Stats Fetcher & Coach Analysis")
-    parser.add_argument("mode", nargs='?', default="both", choices=["fetch", "analyze", "export", "both"], 
-                       help="Mode: fetch data from API, analyze existing data, export to CSV, or both fetch+analyze (default: both)")
+    parser.add_argument("mode", nargs='?', default="both", choices=["fetch", "analyze", "export", "both", "validate"], 
+                       help="Mode: fetch data from API, analyze existing data, export to CSV, both fetch+analyze, or validate setup (default: both)")
     parser.add_argument("--days", type=int, default=30,
                        help="Number of days to fetch/export (default: 30)")
     parser.add_argument("--infile", type=str, default="hevy_events.json",
@@ -2984,6 +3203,11 @@ def main():
                        help="Test email configuration without generating report")
     
     args = parser.parse_args()
+    
+    # Validate setup mode
+    if args.mode == "validate":
+        validate_setup()
+        return
     
     # Test email configuration if requested
     if args.test_email:

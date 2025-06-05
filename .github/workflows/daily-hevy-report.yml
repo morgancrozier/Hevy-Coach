@@ -12,6 +12,12 @@ on:
   
   # Allow manual triggering from GitHub UI
   workflow_dispatch:
+    inputs:
+      force_report:
+        description: 'Force generate report even if no new workouts'
+        required: false
+        default: true
+        type: boolean
 
 # Add permissions for the workflow to write to the repository
 permissions:
@@ -44,6 +50,7 @@ jobs:
       id: check_workouts
       env:
         HEVY_API_KEY: ${{ secrets.HEVY_API_KEY }}
+        FORCE_REPORT: ${{ github.event.inputs.force_report || 'false' }}
       run: |
         echo "🔍 Checking for new workouts since last report..."
         
@@ -102,9 +109,14 @@ jobs:
             if latest_workout:
                 print(f'🏋️ Latest workout found: {latest_workout}')
                 
-                # Check if this is newer than last processed
-                if last_processed is None or latest_workout > last_processed:
-                    print('🎉 NEW WORKOUT DETECTED! Generating report...')
+                # Check if this is newer than last processed, or if manual force is enabled
+                force_report = os.getenv('FORCE_REPORT', 'false').lower() == 'true'
+                
+                if last_processed is None or latest_workout > last_processed or force_report:
+                    if force_report and latest_workout <= (last_processed or ''):
+                        print('🔄 MANUAL RUN: Forcing report generation...')
+                    else:
+                        print('🎉 NEW WORKOUT DETECTED! Generating report...')
                     
                     # Save new state
                     new_state = {
@@ -125,9 +137,16 @@ jobs:
                     with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                         f.write('generate_report=false\n')
             else:
-                print('📭 No recent workouts found')
-                with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                    f.write('generate_report=false\n')
+                # No recent workouts found, but check if manual force is enabled
+                force_report = os.getenv('FORCE_REPORT', 'false').lower() == 'true'
+                if force_report:
+                    print('🔄 MANUAL RUN: No recent workouts, but forcing report generation...')
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                        f.write('generate_report=true\n')
+                else:
+                    print('📭 No recent workouts found')
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                        f.write('generate_report=false\n')
                     
         except Exception as e:
             print(f'❌ Error checking workouts: {e}')
@@ -199,10 +218,17 @@ jobs:
       if: always()
       run: |
         if [ "${{ steps.check_workouts.outputs.generate_report }}" == "true" ]; then
-          echo "🎉 NEW WORKOUT REPORT GENERATED!"
-          echo "📧 Check your email for the coaching report"
-          echo "📁 Report files are available in workflow artifacts"
-          echo "💪 Keep up the great work!"
+          if [ "${{ github.event.inputs.force_report }}" == "true" ]; then
+            echo "🔄 MANUAL REPORT GENERATED!"
+            echo "📧 Check your email for the coaching report"
+            echo "📁 Report files are available in workflow artifacts"
+            echo "💪 Manual report completed successfully!"
+          else
+            echo "🎉 NEW WORKOUT REPORT GENERATED!"
+            echo "📧 Check your email for the coaching report"
+            echo "📁 Report files are available in workflow artifacts"
+            echo "💪 Keep up the great work!"
+          fi
         else
           echo "✅ No new workouts detected - no report needed"
           echo "🔄 Will check again in 30 minutes during workout window"

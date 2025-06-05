@@ -1,3 +1,125 @@
+# 🏋️‍♂️ Hevy Comprehensive Coaching Reports
+
+> **Intelligent workout analysis and coaching recommendations based on your Hevy workout data**
+
+Transform your Hevy workout logs into **personalized coaching insights** with RPE-aware analysis, exercise-specific progression tracking, and **AI-powered coaching recommendations**.
+
+## ✨ Features
+
+### 🧠 **AI-Powered Coaching** ⭐ **NEW!**
+- **Personalized Session Summaries**: GPT-4o-mini analyzes your workout and provides encouraging, specific feedback
+- **Next Session Focus**: AI recommends specific focus points for your next training session  
+- **Pattern Analysis**: Identifies subtle training patterns your rule-based analysis might miss
+- **Cost-Effective**: ~$0.01-0.05 per report using GPT-4o-mini
+
+### 📊 **Comprehensive Analysis**
+- **RPE-Aware Recommendations**: Understands when you're pushing too hard or not hard enough
+- **Exercise-Specific Progression**: Tracks progress for each exercise individually
+- **Session Quality Grading**: Grades your workouts (A+ to F) based on smart progression decisions
+- **Peak Performance Analysis**: Identifies your best performances and progression opportunities
+
+### 🔄 **Cyclical Routine Tracking** (Optional & Configurable)
+- **Intelligent Cycle Detection**: Automatically determines where you are in your routine cycle
+- **Next Workout Prediction**: Tells you which workout comes next based on your patterns
+- **Exercise-Specific Recommendations**: Suggests weights for upcoming workouts based on RPE history
+- **Flexible Configuration**: Supports any workout split (3, 4, 5, 6+ day cycles)
+
+### 📈 **Advanced Analytics**
+- **Plateau Detection**: Identifies when you've plateaued on specific exercises
+- **Volume & Recovery Insights**: Analyzes your training volume and recovery patterns
+- **Decision Quality Evolution**: Tracks how your training decisions have improved over time
+- **Comprehensive Fitness Trends**: Overall trajectory of your fitness journey
+
+### 🤖 **Automation & Integration**
+- **Email Reports**: Automated daily email summaries
+- **GitHub Actions**: Cloud-based report generation on schedule
+- **Markdown Export**: Beautiful formatted reports for sharing
+- **CSV Export**: Raw data export for further analysis
+
+## 🚀 Installation & Setup
+
+### 1. **Clone Repository**
+```bash
+git clone <repository-url>
+cd hevy-coaching-reports
+```
+
+### 2. **Install Dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+### 3. **Get Your Hevy API Key**
+1. **Hevy Pro Subscription Required** ($4/month)
+2. Open Hevy app → Profile → Developer → Generate API Key
+3. Copy your API key
+
+### 4. **Configure Environment**
+Create a `.env` file:
+```bash
+# Required - Hevy API
+HEVY_API_KEY=your_hevy_api_key_here
+
+# Optional - AI Coaching (GPT-4o-mini)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional - Email Reports
+EMAIL_SMTP_SERVER=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_FROM=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password
+EMAIL_TO=recipient@gmail.com
+```
+
+### 5. **Configure Exercise Targets** (Recommended)
+```bash
+cp rep_rules.example.py rep_rules.py
+# Edit rep_rules.py to set target rep ranges for your exercises
+```
+
+### 6. **Configure Cyclical Routines** (Optional)
+```bash
+cp routine_config.example.py routine_config.py  
+# Edit routine_config.py for your specific workout split
+```
+
+### 7. **Validate Setup**
+```bash
+python hevy_stats.py validate
+```
+
+## 💡 Usage
+
+### **Quick Analysis**
+```bash
+python hevy_stats.py analyze
+```
+
+### **AI-Enhanced Report** (with OpenAI API key)
+The same `analyze` command automatically includes AI insights when configured:
+- 🤖 **Personalized session summary**
+- 🎯 **Next session focus points**  
+- 📊 **Advanced pattern recognition**
+
+### **Export Options**
+```bash
+# Save to markdown file
+python hevy_stats.py analyze --save-markdown
+
+# Export to CSV
+python hevy_stats.py export
+
+# Email report
+python hevy_stats.py analyze --email
+```
+
+### **GitHub Actions** (Automated Reports)
+The included workflow automatically:
+- ✅ Checks for new workouts every 30 minutes (4-6pm Thailand time)
+- 📧 Sends email reports when new sessions are detected
+- 🤖 Includes AI insights in automated reports
+- 💾 Tracks state to avoid duplicate reports
+
 # 🏋️‍♂️ Hevy Fitness Coach & Analytics
 
 **AI-powered coaching insights from your Hevy workout data** - Get personalized recommendations, progression tracking, and intelligent RPE-based guidance automatically delivered to your inbox daily!

@@ -1,49 +1,157 @@
-# Hevy App TODO List
+# 📋 TODO List
 
-## ✅ Completed Tasks
+## ✅ Completed Items
 
-### 2025-01-03: Cyclical Routine Integration - ✅ COMPLETED & TESTED
-- [x] **Cyclical Workout Routine Tracking**: Implemented and tested 6-day workout cycle support
-  - Day 1: Upper Push
-  - Day 2: Lower Hamstring
-  - Day 3: Rest / Treadmill
-  - Day 4: Upper Pull
-  - Day 5: Lower Quad
-  - Day 6: Rest
-  - ✅ Automatically determines next workout in cycle based on recent training history
-  - ✅ Provides workout-specific recommendations for upcoming session instead of just today's
-  - ✅ Fetches routine data from Hevy API for detailed exercise recommendations
-  - ✅ RPE-based weight progression suggestions for each exercise (increase/decrease/maintain)
-  - ✅ Separate recommendations for rest days vs. training days
-  - ✅ Successfully tested: correctly identified "Day 2 - Lower (Hamstring)" as next workout
-  - ✅ Working exercise recommendations: Leg Press +2.5kg, Standing Leg Curls -2.5kg, etc.
-  - ✅ **Documentation Updated**: README.md and comprehensive docs/CYCLICAL-ROUTINES.md created
-  - ✅ **Made Completely Optional**: No hardcoded routines - uses configurable `routine_config.py`
-  - ✅ **Configurable Routine Support**: Users can define any cycle (3-day, 4-day, 5-day, etc.)
-  - ✅ **Graceful Degradation**: Skips feature entirely if no config file, works as before
+### ✅ **Core Features** 
+- [x] Basic workout fetching and analysis
+- [x] RPE-based coaching recommendations  
+- [x] Email automation with coaching reports
+- [x] GitHub Actions automated daily reports
+- [x] Exercise-specific rep range configuration
+- [x] CSV export functionality
+- [x] Markdown report generation
+- [x] Comprehensive progression tracking
+- [x] Peak performance analysis
+- [x] Cyclical routine tracking (configurable)
+- [x] Assisted exercise handling (weight logic reversal)
 
-## 🔲 Pending Tasks
+### ✅ **User Experience Improvements (NEW!)**
+- [x] Quick summary section for mobile-friendly reports
+- [x] Setup validation tool (`python hevy_stats.py validate`)
+- [x] Priority-based exercise recommendations
+- [x] Actionable quick focus suggestions
 
-### High Priority
-- [ ] **Web App Development**: Create a web interface for easier access to reports
-- [ ] **Mobile Responsiveness**: Ensure email reports display well on mobile devices
-- [ ] **Routine Customization**: Allow users to configure their own workout cycles
+### ✅ **Technical Improvements**
+- [x] GitHub Actions workflow fixes (exit code 128)
+- [x] Error handling for assisted exercises
+- [x] Configuration validation and testing
+- [x] Email connection testing
+- [x] API connection validation
 
-### Medium Priority
-- [ ] **Exercise Form Analysis**: Track and recommend form improvements
-- [ ] **Injury Prevention**: Add warnings for rapid weight increases or volume spikes
-- [ ] **Nutrition Integration**: Connect with nutrition tracking for recovery insights
+### ✅ **AI-Powered Features (NEW!)**
+- [x] GPT-4o-mini integration for personalized coaching insights
+- [x] AI-powered session summaries with encouraging feedback
+- [x] Next session focus point recommendations
+- [x] Cost-effective implementation (~$0.01-0.05 per report)
+- [x] Graceful degradation when AI unavailable
+- [x] Enhanced setup validation with AI testing
 
-### Low Priority
-- [ ] **Social Features**: Share workout progress with friends/coaches
-- [ ] **Equipment Tracking**: Track which equipment is available/preferred
-- [ ] **Weather Integration**: Adjust outdoor workout recommendations
+---
 
-## 📝 Notes
+## 🚨 **HIGH PRIORITY** (Next 2-4 weeks)
 
-- ✅ The cyclical routine feature is fully functional and requires HEVY_API_KEY environment variable
-- ✅ Successfully integrates with existing analysis and provides next-workout recommendations
-- ✅ Uses exercise-specific RPE analysis to provide intelligent weight adjustments
-- ✅ Routine matching works with workout titles and exercise patterns from your Hevy data
-- ✅ Historical data analysis goes back up to 4 sessions per exercise for progression tracking
-- 🎯 **Result**: Instead of getting recommendations for today's workout (that you won't repeat for 6 days), you now get recommendations for your NEXT upcoming workout! 
+### 🔥 **User Experience Overhaul**
+- [ ] **Progressive Disclosure UI**: Layer reports by detail level (quick → overview → deep analysis)
+- [ ] **Intelligent Error Handling**: Replace technical errors with friendly, actionable messages
+- [ ] **Goal-Based Coaching Modes**: Beginner/Intermediate/Advanced with different thresholds
+- [ ] **Mobile-First Email Redesign**: Thumb-friendly, collapsible sections, better formatting
+
+### 🎯 **Setup & Onboarding**  
+- [ ] **Guided Setup Wizard**: Interactive configuration process
+- [ ] **Auto-Exercise Detection**: Suggest rep ranges based on exercise history
+- [ ] **Smart Defaults**: Reasonable fallbacks when configuration is incomplete
+- [ ] **One-Click Setup**: Automated configuration for common use cases
+
+---
+
+## 🚀 **MEDIUM PRIORITY** (Next 1-2 months)
+
+### 🧠 **Coaching Intelligence**
+- [ ] **Enhanced RPE Analysis**: Fatigue accumulation, trend analysis, recovery recommendations
+- [ ] **Exercise Categorization**: Different logic for compounds vs. accessories
+- [ ] **Plateau Detection**: Proactive deload and program change suggestions
+- [ ] **Data Quality Scoring**: Confidence metrics and suspicious data flagging
+
+### ⚡ **Real-Time Features**
+- [ ] **Workout Companion Mode**: Live coaching during workouts
+- [ ] **Pre-Workout Recommendations**: Weight suggestions before starting
+- [ ] **Mid-Workout Adjustments**: RPE-based real-time guidance
+- [ ] **Quick RPE Logging**: Simple interface for immediate post-set feedback
+
+### 📊 **Advanced Analytics**
+- [ ] **Movement Pattern Analysis**: Track push/pull/squat/hinge patterns separately
+- [ ] **Periodization Intelligence**: Detect and suggest training phases
+- [ ] **Volume Autoregulation**: Automatic adjustment based on recovery markers
+- [ ] **Injury Risk Assessment**: Load management and warning systems
+
+---
+
+## 🌟 **FUTURE VISION** (3-6 months)
+
+### 📱 **Web Dashboard**
+- [ ] **Interactive Charts**: Progression graphs, volume trends, RPE patterns
+- [ ] **Workout Planning**: Drag-and-drop routine builder
+- [ ] **Social Features**: Share achievements, community challenges
+- [ ] **Platform Integration**: Export to Strava, MyFitnessPal, other apps
+
+### 🤖 **AI-Powered Features**
+- [ ] **Predictive Analytics**: Plateau and injury risk prediction
+- [ ] **Personalized Periodization**: Custom program recommendations
+- [ ] **Form Analysis**: Video integration with movement feedback
+- [ ] **Natural Language Interface**: Chat with your coaching data
+
+### 👥 **Community & Social**
+- [ ] **Peer Coaching**: Anonymous progress sharing and accountability
+- [ ] **Coach Dashboard**: Professional coaching tools for trainers
+- [ ] **Leaderboards**: Gamification and motivation features
+- [ ] **Educational Content**: Form tips, programming advice, exercise library
+
+---
+
+## 🛠 **Technical Debt & Architecture**
+
+### 🏗️ **Code Quality**
+- [ ] **Modular Architecture**: Split 3000-line script into focused modules
+- [ ] **Unit Testing**: Test critical recommendation algorithms
+- [ ] **Integration Testing**: API and email workflow testing
+- [ ] **Performance Optimization**: Caching, rate limiting, data processing
+
+### 📈 **Scalability**
+- [ ] **Database Backend**: Move from JSON files to proper database
+- [ ] **API Rate Limiting**: Respect Hevy API limits with exponential backoff
+- [ ] **Background Processing**: Async report generation
+- [ ] **Monitoring & Logging**: Track usage patterns and errors
+
+### 📚 **Documentation**
+- [ ] **API Documentation**: Complete function and endpoint documentation
+- [ ] **User Guides**: Step-by-step tutorials with screenshots
+- [ ] **Developer Documentation**: Architecture overview and contribution guide
+- [ ] **Video Tutorials**: Setup and usage walkthroughs
+
+---
+
+## 🎯 **SUCCESS METRICS TO TRACK**
+
+### **User Experience**
+- Time to first successful analysis: Target **< 5 minutes**
+- Report comprehension: Users find actionable insights in **< 2 minutes**
+- Setup success rate: **> 90%** complete setup on first attempt
+- Feature adoption: **> 60%** use cyclical routine tracking
+
+### **Coaching Quality**
+- Recommendation accuracy: **> 85%** user satisfaction surveys
+- Progress tracking: **> 70%** show measurable improvement over 4 weeks
+- Safety record: **0** reported injuries from following recommendations
+- Engagement: **> 80%** user retention after first week
+
+### **Technical Performance**
+- Report generation: **< 30 seconds** average
+- API reliability: **> 99%** successful data fetches
+- Email delivery: **> 95%** successful report delivery
+- Error rate: **< 5%** of analysis runs encounter errors
+
+---
+
+## 📝 **Implementation Notes**
+
+**Current Status**: The app is technically sophisticated but needs UX polish. The core analysis engine is excellent - focus on making insights more accessible.
+
+**Priority Philosophy**: User experience improvements over new features. Better to have fewer features that work beautifully than many features that are hard to use.
+
+**Development Approach**: 
+1. Implement quick wins first (progressive disclosure)
+2. Test with real users frequently  
+3. Measure time-to-insight improvements
+4. Refactor while adding features (don't accumulate technical debt)
+
+**Next Milestone**: Transform from "powerful tool for data enthusiasts" to "delightful coaching companion for all fitness levels" 🎯 
