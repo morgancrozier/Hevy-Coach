@@ -553,22 +553,55 @@ class WorkoutCycle:
         if len(df) == 0:
             return 0  # Default to Day 1
         
-        # Get the most recent workout
-        recent_workouts = df.sort_values('date').tail(5)  # Look at last 5 workouts
+        # Get unique workouts (by date and title) rather than individual exercise sets
+        workout_info = df.groupby(['date', 'workout']).first().reset_index()
+        recent_workouts = workout_info.sort_values('date').tail(5)  # Look at last 5 workouts
         
-        # Try to match workout titles to cycle days
-        for _, workout in recent_workouts.iterrows():
+        # First, check if the most recent workout (regardless of type) is a rest day
+        last_workout = recent_workouts.iloc[-1]
+        last_workout_title = last_workout.get('workout', '').lower()
+        last_workout_date = last_workout.get('date')
+        exercises = df[df['date'] == last_workout_date]['exercise'].unique()
+        
+        # Detect rest days by title patterns or cardio-only workouts
+        rest_day_indicators = ['rest', 'treadmill', 'cardio', 'recovery']
+        is_likely_rest_day = (
+            any(indicator in last_workout_title for indicator in rest_day_indicators) or
+            (len(exercises) == 1 and 'treadmill' in ' '.join(exercises).lower())
+        )
+        
+        if is_likely_rest_day:
+            # Find which rest day this might be by matching title patterns
+            rest_day_match = None
+            for i, cycle_day in enumerate(self.cycle_pattern):
+                cycle_day_lower = cycle_day.lower()
+                if 'rest' in cycle_day_lower or 'treadmill' in cycle_day_lower:
+                    # Check if this specific rest day matches the workout title better
+                    if 'treadmill' in last_workout_title and 'treadmill' in cycle_day_lower:
+                        rest_day_match = i
+                        break
+                    elif 'rest' in last_workout_title and 'rest' in cycle_day_lower and 'treadmill' not in cycle_day_lower:
+                        rest_day_match = i
+                        break
+                    elif rest_day_match is None:  # First rest day found as fallback
+                        rest_day_match = i
+            
+            if rest_day_match is not None:
+                # This was a rest day, so next day is the one after this rest day
+                return (rest_day_match + 1) % len(self.cycle_pattern)
+            
+            # If no rest day found in cycle pattern, assume it was day 3 (your typical rest day)
+            return 3  # Day 4 - Upper (Pull) comes after Day 3 - Rest / Treadmill
+        
+        # If most recent workout is not a rest day, look for strength training workouts
+        for _, workout in recent_workouts.iloc[::-1].iterrows():  # Reverse order - most recent first
             workout_title = workout.get('workout', '')
             if workout_title in self.routine_title_mapping:
                 last_cycle_day = self.routine_title_mapping[workout_title]
                 # Next day in cycle
                 return (last_cycle_day + 1) % len(self.cycle_pattern)
         
-        # If we can't determine from titles, analyze exercises to guess the workout type
-        last_workout = recent_workouts.iloc[-1]
-        exercises = recent_workouts[recent_workouts['date'] == last_workout['date']]['exercise'].unique()
-        
-        # Use configurable exercise patterns instead of hardcoded heuristics
+        # Use configurable exercise patterns for strength training workouts
         exercise_str = ' '.join(exercises).lower()
         
         for pattern_name, pattern_config in self.exercise_patterns.items():
@@ -896,10 +929,10 @@ class EmailSender:
             msg['To'] = self.to_email
             msg['Subject'] = f"🏋️‍♂️ Hevy Coaching Report - {datetime.now().strftime('%Y-%m-%d')}"
             
-            # Create condensed email content
-            condensed_content = self.create_condensed_email_content(report_content)
+            # Convert full report to HTML with comprehensive mobile-friendly styling
+            full_html_content = self.markdown_to_html(report_content)
             
-            # Create HTML email body with simplified mobile-friendly styling
+            # Create comprehensive HTML email body
             html_body = f"""
             <!DOCTYPE html>
             <html>
@@ -909,11 +942,11 @@ class EmailSender:
                 <style>
                     body {{
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-                        line-height: 1.5;
+                        line-height: 1.6;
                         color: #333;
-                        max-width: 600px;
+                        max-width: 800px;
                         margin: 0 auto;
-                        padding: 15px;
+                        padding: 10px;
                         background-color: #f8f9fa;
                     }}
                     .container {{
@@ -922,177 +955,149 @@ class EmailSender:
                         border-radius: 8px;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     }}
+                    
+                    /* Headers */
                     h1 {{
                         color: #2c3e50;
-                        border-bottom: 2px solid #3498db;
-                        padding-bottom: 8px;
+                        border-bottom: 3px solid #3498db;
+                        padding-bottom: 10px;
                         margin-bottom: 20px;
-                        font-size: 1.4em;
+                        font-size: 1.8em;
+                        text-align: center;
                     }}
                     h2 {{
                         color: #34495e;
-                        margin-top: 20px;
-                        margin-bottom: 12px;
-                        font-size: 1.1em;
+                        border-bottom: 2px solid #ecf0f1;
+                        padding-bottom: 8px;
+                        margin-top: 30px;
+                        margin-bottom: 15px;
+                        font-size: 1.3em;
                     }}
                     h3 {{
                         color: #2c3e50;
-                        margin-top: 12px;
-                        margin-bottom: 8px;
-                        font-size: 1em;
-                    }}
-                    
-                    /* Quick Summary Styling */
-                    .quick-summary {{
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        padding: 20px;
-                        border-radius: 8px;
-                        margin-bottom: 20px;
-                        text-align: center;
-                    }}
-                    .grade-box {{
-                        background: rgba(255,255,255,0.15);
-                        padding: 15px;
-                        border-radius: 6px;
-                        margin-top: 10px;
-                    }}
-                    .grade {{
-                        font-size: 1.8em;
-                        font-weight: bold;
-                        display: block;
-                        margin-bottom: 8px;
-                    }}
-                    .progression {{
-                        font-weight: bold;
-                        margin-top: 8px;
-                        font-size: 0.95em;
-                    }}
-                    
-                    /* Action Section Styling */
-                    .action-section {{
-                        background: #f8f9fa;
-                        padding: 15px;
-                        border-radius: 6px;
-                        margin-bottom: 20px;
-                    }}
-                    .adjustments {{
-                        background: #fff3cd;
-                        border-left: 4px solid #f39c12;
-                        padding: 12px;
-                        margin: 8px 0;
-                        border-radius: 0 4px 4px 0;
-                    }}
-                    .good-weights {{
-                        background: #d5f4e6;
-                        border-left: 4px solid #27ae60;
-                        padding: 12px;
-                        margin: 8px 0;
-                        border-radius: 0 4px 4px 0;
-                    }}
-                    .insights {{
-                        background: #e3f2fd;
-                        border-left: 4px solid #2196f3;
-                        padding: 12px;
-                        margin: 8px 0;
-                        border-radius: 0 4px 4px 0;
-                    }}
-                    
-                    /* Simplified Full Report */
-                    .full-report {{
-                        margin-top: 25px;
-                        border-top: 1px solid #dee2e6;
-                        padding-top: 15px;
-                    }}
-                    details {{
-                        background: #f8f9fa;
-                        border-radius: 6px;
-                        padding: 10px;
-                    }}
-                    summary {{
-                        cursor: pointer;
-                        font-weight: bold;
-                        padding: 8px;
-                        background: #e9ecef;
-                        border-radius: 4px;
+                        margin-top: 20px;
                         margin-bottom: 10px;
-                        font-size: 0.95em;
-                    }}
-                    summary:hover {{
-                        background: #dee2e6;
-                    }}
-                    .detailed-content {{
-                        margin-top: 10px;
-                        padding: 10px;
-                        background: white;
-                        border-radius: 4px;
-                        border: 1px solid #dee2e6;
+                        font-size: 1.1em;
                     }}
                     
-                    /* Simple list styling */
-                    ul {{ 
-                        padding-left: 18px; 
-                        margin: 8px 0;
-                    }}
-                    li {{ 
-                        margin: 3px 0;
-                        line-height: 1.4;
-                    }}
-                    
-                    /* Clean paragraph styling */
+                    /* Text styling */
                     p {{
-                        margin: 8px 0;
-                        line-height: 1.4;
+                        margin: 10px 0;
+                    }}
+                    strong {{
+                        color: #2c3e50;
                     }}
                     
-                    .footer {{
-                        margin-top: 25px;
-                        padding-top: 12px;
-                        border-top: 1px solid #dee2e6;
-                        text-align: center;
-                        color: #6c757d;
-                        font-size: 0.85em;
+                    /* Lists */
+                    ul, ol {{
+                        margin: 10px 0;
+                        padding-left: 25px;
+                    }}
+                    li {{
+                        margin: 5px 0;
                     }}
                     
-                    /* Mobile-first responsive design */
+                    /* Code and preformatted text */
+                    pre, code {{
+                        background-color: #f8f9fa;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-family: 'Monaco', 'Menlo', monospace;
+                        font-size: 0.9em;
+                    }}
+                    pre {{
+                        padding: 12px;
+                        margin: 10px 0;
+                        overflow-x: auto;
+                        border-left: 4px solid #3498db;
+                    }}
+                    
+                    /* Special highlight for AI sections */
+                    .ai-section {{
+                        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+                        border-left: 4px solid #e91e63;
+                        padding: 15px;
+                        margin: 15px 0;
+                        border-radius: 0 6px 6px 0;
+                    }}
+                    
+                    /* Workout recommendations */
+                    .workout-rec {{
+                        background: #e8f5e8;
+                        border-left: 4px solid #28a745;
+                        padding: 15px;
+                        margin: 15px 0;
+                        border-radius: 0 6px 6px 0;
+                    }}
+                    
+                    /* Horizontal rules */
+                    hr {{
+                        border: none;
+                        border-top: 2px solid #ecf0f1;
+                        margin: 25px 0;
+                    }}
+                    
+                    /* Tables */
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 15px 0;
+                    }}
+                    th, td {{
+                        border: 1px solid #dee2e6;
+                        padding: 8px 12px;
+                        text-align: left;
+                    }}
+                    th {{
+                        background-color: #f8f9fa;
+                        font-weight: bold;
+                    }}
+                    
+                    /* Mobile responsiveness */
                     @media (max-width: 600px) {{
-                        body {{ 
-                            padding: 10px; 
-                            font-size: 14px;
+                        body {{
+                            padding: 5px;
                         }}
-                        .container {{ 
-                            padding: 15px; 
-                        }}
-                        h1 {{ 
-                            font-size: 1.2em; 
-                        }}
-                        h2 {{ 
-                            font-size: 1em; 
-                        }}
-                        .grade {{ 
-                            font-size: 1.5em; 
-                        }}
-                        .quick-summary {{
+                        .container {{
                             padding: 15px;
                         }}
-                        .action-section {{
-                            padding: 12px;
+                        h1 {{
+                            font-size: 1.4em;
                         }}
-                        .adjustments, .good-weights, .insights {{
-                            padding: 10px;
+                        h2 {{
+                            font-size: 1.2em;
+                        }}
+                        h3 {{
+                            font-size: 1.0em;
+                        }}
+                        pre {{
+                            font-size: 0.8em;
+                            padding: 8px;
+                        }}
+                        table {{
+                            font-size: 0.9em;
+                        }}
+                        th, td {{
+                            padding: 6px 8px;
+                        }}
+                    }}
+                    
+                    /* Print styles */
+                    @media print {{
+                        .container {{
+                            box-shadow: none;
+                            border: 1px solid #ccc;
                         }}
                     }}
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>🏋️‍♂️ Daily Hevy Coaching Report</h1>
+                    {full_html_content}
                     
-                    {condensed_content}
-                    
-                    <div class="footer">
-                        <p>💡 AI-powered coaching analysis</p>
-                        <p>Generated {datetime.now().strftime('%Y-%m-%d %H:%M UTC')} • <strong>Hevy Coach Pro</strong></p>
+                    <div class="footer" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ecf0f1; text-align: center; color: #7f8c8d; font-size: 0.9em;">
+                        <p><strong>📧 Generated on {datetime.now().strftime('%Y-%m-%d at %H:%M')}</strong></p>
+                        <p>🤖 Enhanced with AI coaching insights | 💪 Keep crushing your goals!</p>
                     </div>
                 </div>
             </body>
@@ -1830,7 +1835,9 @@ def print_comprehensive_report(df: pd.DataFrame):
     if api_key := os.getenv("HEVY_API_KEY"):
         workout_cycle = WorkoutCycle(api_key)
         if workout_cycle.is_available():
-            next_workout_info = workout_cycle.get_next_workout_info(df)
+            # Use unfiltered data for cycle detection (includes treadmill/cardio for rest day detection)
+            df_with_cardio = filter_recent_data(events_to_df("hevy_events.json"), 90)
+            next_workout_info = workout_cycle.get_next_workout_info(df_with_cardio)
     
     # 🚀 QUICK SUMMARY - Mobile-friendly, action-focused
     print("\n" + "🚀 QUICK SUMMARY".center(80))
@@ -1979,12 +1986,62 @@ def print_comprehensive_report(df: pd.DataFrame):
                     if recommendations["type"] == "workout_specific":
                         exercise_recs = recommendations["exercise_recommendations"]
                         if exercise_recs:
-                            print(f"\n💡 **Next Session Recommendations**:")
-                            for exercise, rec in list(exercise_recs.items())[:5]:
-                                action_emoji = "⬆️" if rec["action"] == "increase" else "⬇️" if rec["action"] == "decrease" else "✅"
-                                print(f"   {action_emoji} **{exercise}**: {rec['suggested_weight']:.1f}kg ({rec['reasoning']})")
+                            print(f"⏰ **Cycle Info**: This workout repeats every {next_workout_info['days_until_same_workout']} days")
+                            print(f"\n🎯 **Exercise-Specific Recommendations for {next_workout_info['workout_name']}**:")
+                            
+                            # Categorize recommendations
+                            increases = []
+                            decreases = []
+                            maintains = []
+                            
+                            for exercise, rec in exercise_recs.items():
+                                if rec["action"] == "increase":
+                                    increases.append((exercise, rec))
+                                elif rec["action"] == "decrease":
+                                    decreases.append((exercise, rec))
+                                else:
+                                    maintains.append((exercise, rec))
+                            
+                            # Show increases
+                            if increases:
+                                print(f"\n📈 **Suggested Increases**:")
+                                for exercise, rec in increases:
+                                    print(f"   • **{exercise}**: {rec['current_weight']:.1f}kg → {rec['suggested_weight']:.1f}kg ({rec['reasoning']})")
+                            
+                            # Show decreases  
+                            if decreases:
+                                print(f"\n📉 **Suggested Decreases**:")
+                                for exercise, rec in decreases:
+                                    print(f"   • **{exercise}**: {rec['current_weight']:.1f}kg → {rec['suggested_weight']:.1f}kg ({rec['reasoning']})")
+                            
+                            # Show maintains
+                            if maintains:
+                                print(f"\n✅ **Maintain Current Weights**:")
+                                for exercise, rec in maintains:
+                                    print(f"   • **{exercise}**: Keep {rec['current_weight']:.1f}kg ({rec['reasoning']})")
+                            
+                            # Show general recommendations
+                            if recommendations.get("general_recommendations"):
+                                print(f"\n💡 **General Recommendations**:")
+                                for rec in recommendations["general_recommendations"]:
+                                    print(f"   • {rec}")
+                        
+                        # Add AI insights as supplement to structured recommendations
+                        if ai_coach.is_available():
+                            ai_next_day = ai_coach.generate_next_day_overview(
+                                last_session, next_workout_info, comprehensive_trends, volume_recovery
+                            )
+                            if ai_next_day:
+                                print(f"\n🤖 **AI WORKOUT STRATEGY**:")
+                                print(f"   {ai_next_day}")
                 else:
                     print(f"😴 **Rest Day** - Focus on recovery!")
+                    # Add AI recovery insights for rest days
+                    if ai_coach.is_available():
+                        ai_recovery = ai_coach.generate_recovery_insights(volume_recovery, comprehensive_trends)
+                        if ai_recovery:
+                            print(f"\n🤖 **AI RECOVERY STRATEGY**:")
+                            print(f"   {ai_recovery}")
             else:
                 print("💡 Configure your routine cycle for personalized next-workout recommendations")
         else:
@@ -2093,16 +2150,7 @@ def print_comprehensive_report(df: pd.DataFrame):
         else:
             print("📊 Insufficient session history for decision quality analysis")
     
-    # 🚀 AI NEXT DAY OVERVIEW - New comprehensive section
-    if ai_coach.is_available() and next_workout_info:
-        print(f"\n🚀 **AI NEXT DAY STRATEGY**")
-        print("-" * 50)
-        
-        ai_next_day = ai_coach.generate_next_day_overview(
-            last_session, next_workout_info, comprehensive_trends, volume_recovery
-        )
-        if ai_next_day:
-            print(f"{ai_next_day}")
+
     
     print("\n" + "="*80)
 
