@@ -929,8 +929,17 @@ class EmailSender:
             msg['To'] = self.to_email
             msg['Subject'] = f"🏋️‍♂️ Hevy Coaching Report - {datetime.now().strftime('%Y-%m-%d')}"
             
-            # Convert full report to HTML with comprehensive mobile-friendly styling
-            full_html_content = self.markdown_to_html(report_content)
+            # Use markdown file content if available, otherwise use report_content
+            content_to_convert = report_content
+            if markdown_file and os.path.exists(markdown_file):
+                try:
+                    with open(markdown_file, 'r', encoding='utf-8') as f:
+                        content_to_convert = f.read()
+                except Exception as e:
+                    print(f"⚠️ Could not read markdown file, using report_content: {e}")
+            
+            # Convert to HTML with enhanced formatting
+            full_html_content = self.markdown_to_html(content_to_convert)
             
             # Create comprehensive HTML email body
             html_body = f"""
@@ -957,27 +966,49 @@ class EmailSender:
                     }}
                     
                     /* Headers */
-                    h1 {{
+                    h1.main-title {{
                         color: #2c3e50;
                         border-bottom: 3px solid #3498db;
-                        padding-bottom: 10px;
+                        padding: 15px;
                         margin-bottom: 20px;
                         font-size: 1.8em;
                         text-align: center;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border-radius: 8px;
                     }}
-                    h2 {{
+                    .quick-summary-header h1 {{
+                        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+                        color: #2c3e50;
+                        padding: 15px;
+                        border-radius: 8px;
+                        text-align: center;
+                        margin: 20px 0;
+                        font-size: 1.5em;
+                    }}
+                    h2.section-header {{
                         color: #34495e;
                         border-bottom: 2px solid #ecf0f1;
-                        padding-bottom: 8px;
+                        padding: 12px 0 8px 0;
                         margin-top: 30px;
                         margin-bottom: 15px;
                         font-size: 1.3em;
+                        background: #f8f9fa;
+                        padding-left: 10px;
+                        border-left: 4px solid #3498db;
                     }}
-                    h3 {{
+                    h3.subsection-header {{
                         color: #2c3e50;
                         margin-top: 20px;
                         margin-bottom: 10px;
                         font-size: 1.1em;
+                        padding: 8px 0;
+                        border-bottom: 1px solid #dee2e6;
+                    }}
+                    h4 {{
+                        color: #2c3e50;
+                        margin: 15px 0 8px 0;
+                        font-size: 1.0em;
                     }}
                     
                     /* Text styling */
@@ -1012,7 +1043,7 @@ class EmailSender:
                         border-left: 4px solid #3498db;
                     }}
                     
-                    /* Special highlight for AI sections */
+                    /* AI sections */
                     .ai-section {{
                         background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
                         border-left: 4px solid #e91e63;
@@ -1020,21 +1051,189 @@ class EmailSender:
                         margin: 15px 0;
                         border-radius: 0 6px 6px 0;
                     }}
+                    .ai-section h3 {{
+                        margin-top: 0;
+                        color: #c2185b;
+                    }}
+                    .ai-content {{
+                        margin: 8px 0;
+                        line-height: 1.6;
+                    }}
                     
-                    /* Workout recommendations */
-                    .workout-rec {{
+                    /* Metrics */
+                    .metric {{
+                        padding: 12px 15px;
+                        margin: 8px 0;
+                        border-radius: 6px;
+                        border-left: 4px solid;
+                        font-weight: 500;
+                    }}
+                    .metric.primary {{
+                        background: #e3f2fd;
+                        border-color: #2196f3;
+                    }}
+                    .metric.secondary {{
+                        background: #f3e5f5;
+                        border-color: #9c27b0;
+                    }}
+                    .metric.success {{
                         background: #e8f5e8;
-                        border-left: 4px solid #28a745;
+                        border-color: #4caf50;
+                    }}
+                    .metric.warning {{
+                        background: #fff3e0;
+                        border-color: #ff9800;
+                    }}
+                    .metric.info {{
+                        background: #f0f4c3;
+                        border-color: #8bc34a;
+                    }}
+                    
+                    /* Recommendations */
+                    .recommendations {{
+                        margin: 15px 0;
+                        padding: 15px;
+                        border-radius: 6px;
+                        border-left: 4px solid;
+                    }}
+                    .recommendations.increases {{
+                        background: #e8f5e8;
+                        border-color: #4caf50;
+                    }}
+                    .recommendations.decreases {{
+                        background: #ffebee;
+                        border-color: #f44336;
+                    }}
+                    .recommendations.maintain {{
+                        background: #e3f2fd;
+                        border-color: #2196f3;
+                    }}
+                    .recommendations.general {{
+                        background: #f3e5f5;
+                        border-color: #9c27b0;
+                    }}
+                    .recommendations h4 {{
+                        margin-top: 0;
+                        margin-bottom: 10px;
+                    }}
+                    .recommendations ul {{
+                        margin: 10px 0;
+                        padding-left: 20px;
+                    }}
+                    .exercise-rec {{
+                        margin: 8px 0;
+                        padding: 4px 0;
+                    }}
+                    .general-rec {{
+                        margin: 6px 0;
+                    }}
+                    
+                    /* Exercise Analysis */
+                    .exercise-analysis {{
+                        background: #f8f9fa;
+                        border: 1px solid #dee2e6;
+                        border-radius: 6px;
+                        margin: 10px 0;
+                        padding: 12px;
+                    }}
+                    .exercise-analysis h4 {{
+                        margin-top: 0;
+                        margin-bottom: 8px;
+                        color: #2c3e50;
+                    }}
+                    .exercise-details {{
+                        font-size: 0.95em;
+                        line-height: 1.5;
+                    }}
+                    
+                    /* Priority Actions */
+                    .priority-actions {{
+                        background: #fff3cd;
+                        border-left: 4px solid #ffc107;
                         padding: 15px;
                         margin: 15px 0;
                         border-radius: 0 6px 6px 0;
                     }}
+                    .priority-actions h3 {{
+                        margin-top: 0;
+                        color: #856404;
+                    }}
+                    .priority-actions ol {{
+                        margin: 10px 0;
+                        padding-left: 25px;
+                    }}
+                    .priority-item {{
+                        margin: 8px 0;
+                        font-weight: 500;
+                    }}
+                    
+                    /* Overall Progress */
+                    .overall-progress {{
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 15px;
+                        border-radius: 6px;
+                        text-align: center;
+                        margin: 15px 0;
+                        font-weight: bold;
+                    }}
+                    
+                    /* Grades and indicators */
+                    .grade {{
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        font-weight: bold;
+                        margin: 0 4px;
+                    }}
+                    .grade-A, .grade-A\\+ {{
+                        background: #4caf50;
+                        color: white;
+                    }}
+                    .grade-B, .grade-B\\+ {{
+                        background: #8bc34a;
+                        color: white;
+                    }}
+                    .grade-C, .grade-C\\+ {{
+                        background: #ff9800;
+                        color: white;
+                    }}
+                    .grade-D {{
+                        background: #f44336;
+                        color: white;
+                    }}
+                    
+                    .trend {{
+                        font-size: 1.2em;
+                        margin: 0 4px;
+                    }}
+                    
+                    .percentage {{
+                        font-weight: bold;
+                        padding: 2px 4px;
+                        border-radius: 3px;
+                        background: #f8f9fa;
+                    }}
                     
                     /* Horizontal rules */
-                    hr {{
+                    hr.section-divider {{
                         border: none;
-                        border-top: 2px solid #ecf0f1;
-                        margin: 25px 0;
+                        border-top: 1px solid #dee2e6;
+                        margin: 20px 0;
+                    }}
+                    hr.major-divider {{
+                        border: none;
+                        border-top: 3px solid #3498db;
+                        margin: 30px 0;
+                    }}
+                    
+                    /* Lists */
+                    ul.main-list {{
+                        margin: 15px 0;
+                        padding-left: 25px;
+                    }}
+                    li.main-point {{
+                        margin: 8px 0;
+                        line-height: 1.5;
                     }}
                     
                     /* Tables */
@@ -1042,15 +1241,23 @@ class EmailSender:
                         width: 100%;
                         border-collapse: collapse;
                         margin: 15px 0;
+                        background: white;
+                        border-radius: 6px;
+                        overflow: hidden;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     }}
                     th, td {{
                         border: 1px solid #dee2e6;
-                        padding: 8px 12px;
+                        padding: 12px 15px;
                         text-align: left;
                     }}
                     th {{
-                        background-color: #f8f9fa;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
                         font-weight: bold;
+                    }}
+                    tr:nth-child(even) {{
+                        background: #f8f9fa;
                     }}
                     
                     /* Mobile responsiveness */
@@ -1191,50 +1398,102 @@ Generated by Hevy Coach Pro
         return summary
     
     def markdown_to_html(self, content: str) -> str:
-        """Convert markdown-formatted report content to HTML."""
+        """Convert markdown-formatted report content to properly formatted HTML."""
         import re
         
         # Start with the content
         html = content
         
-        # Convert headers
-        html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
-        html = re.sub(r'^\*\*(.*?)\*\*$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
-        html = re.sub(r'^(.*?)\*\*$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+        # Convert main headers with special styling
+        html = re.sub(r'^🏋️‍♂️  (.+)$', r'<h1 class="main-title">🏋️‍♂️ \1</h1>', html, flags=re.MULTILINE)
+        html = re.sub(r'^🚀 (.+)$', r'<div class="quick-summary-header"><h1>🚀 \1</h1></div>', html, flags=re.MULTILINE)
+        
+        # Convert section headers with emojis 
+        html = re.sub(r'^(⭐|📈|🎯|🔄|📊|🏆|📋) \*\*(.+?)\*\*$', r'<h2 class="section-header">\1 <strong>\2</strong></h2>', html, flags=re.MULTILINE)
+        
+        # Convert subsection headers
+        html = re.sub(r'^\*\*(.+?)\*\*$', r'<h3 class="subsection-header">\1</h3>', html, flags=re.MULTILINE)
         
         # Convert bold text
         html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
         
         # Convert section dividers
-        html = re.sub(r'^-{50,}$', '<hr>', html, flags=re.MULTILINE)
-        html = re.sub(r'^={50,}$', '<hr style="border: 2px solid #3498db;">', html, flags=re.MULTILINE)
+        html = re.sub(r'^-{50,}$', '<hr class="section-divider">', html, flags=re.MULTILINE)
+        html = re.sub(r'^={50,}$', '<hr class="major-divider">', html, flags=re.MULTILINE)
         
-        # Convert bullet points
-        html = re.sub(r'^• (.*?)$', r'<li>\1</li>', html, flags=re.MULTILINE)
-        html = re.sub(r'^  • (.*?)$', r'<li style="margin-left: 20px;">\1</li>', html, flags=re.MULTILINE)
+        # Convert AI sections with special styling
+        html = re.sub(r'^🤖 \*\*(.+?)\*\*:$', r'<div class="ai-section"><h3>🤖 \1</h3>', html, flags=re.MULTILINE)
+        html = re.sub(r'^   (.+)$', r'<p class="ai-content">\1</p></div>', html, flags=re.MULTILINE)
         
-        # Wrap consecutive list items in ul tags
-        html = re.sub(r'(<li>.*?</li>(\n<li>.*?</li>)*)', r'<ul>\1</ul>', html, flags=re.DOTALL)
+        # Convert metric lines with special styling
+        html = re.sub(r'^🎯 \*\*(.+?)\*\*: (.+)$', r'<div class="metric primary">🎯 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^📝 \*\*(.+?)\*\*: (.+)$', r'<div class="metric secondary">📝 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^💪 \*\*(.+?)\*\*: (.+)$', r'<div class="metric success">💪 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^🔥 \*\*(.+?)\*\*: (.+)$', r'<div class="metric warning">🔥 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^📈 \*\*(.+?)\*\*: (.+)$', r'<div class="metric info">📈 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^📅 \*\*(.+?)\*\*: (.+)$', r'<div class="metric info">📅 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^📊 \*\*(.+?)\*\*: (.+)$', r'<div class="metric info">📊 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
         
-        # Convert metric lines to styled divs
-        html = re.sub(r'^🎯 (.*?)$', r'<div class="metric">🎯 <strong>\1</strong></div>', html, flags=re.MULTILINE)
-        html = re.sub(r'^📝 (.*?)$', r'<div class="metric">📝 \1</div>', html, flags=re.MULTILINE)
-        html = re.sub(r'^💪 (.*?)$', r'<div class="metric">💪 \1</div>', html, flags=re.MULTILINE)
-        html = re.sub(r'^🔥 (.*?)$', r'<div class="metric">🔥 \1</div>', html, flags=re.MULTILINE)
-        html = re.sub(r'^📈 (.*?)$', r'<div class="metric">📈 \1</div>', html, flags=re.MULTILINE)
+        # Convert exercise recommendations with special styling
+        html = re.sub(r'^📈 \*\*Suggested Increases\*\*:$', r'<div class="recommendations increases"><h4>📈 Suggested Increases</h4><ul>', html, flags=re.MULTILINE)
+        html = re.sub(r'^📉 \*\*Suggested Decreases\*\*:$', r'<div class="recommendations decreases"><h4>📉 Suggested Decreases</h4><ul>', html, flags=re.MULTILINE)
+        html = re.sub(r'^✅ \*\*Maintain Current Weights\*\*:$', r'<div class="recommendations maintain"><h4>✅ Maintain Current Weights</h4><ul>', html, flags=re.MULTILINE)
+        html = re.sub(r'^💡 \*\*General Recommendations\*\*:$', r'</ul></div><div class="recommendations general"><h4>💡 General Recommendations</h4><ul>', html, flags=re.MULTILINE)
         
-        # Convert exercise blocks
-        exercise_pattern = r'\*\*(.*?)\*\*\n((?:   .*?\n)*)'
-        html = re.sub(exercise_pattern, r'<div class="exercise"><h3>\1</h3>\2</div>', html, flags=re.MULTILINE)
+        # Convert bullet points with proper nesting
+        html = re.sub(r'^   • \*\*(.+?)\*\*: (.+)$', r'<li class="exercise-rec"><strong>\1</strong>: \2</li>', html, flags=re.MULTILINE)
+        html = re.sub(r'^   • (.+)$', r'<li class="general-rec">\1</li>', html, flags=re.MULTILINE)
+        html = re.sub(r'^• \*\*(.+?)\*\*: (.+)$', r'<li class="main-point"><strong>\1</strong>: \2</li>', html, flags=re.MULTILINE)
+        html = re.sub(r'^• (.+)$', r'<li class="main-point">\1</li>', html, flags=re.MULTILINE)
+        
+        # Convert exercise analysis blocks
+        html = re.sub(r'^\*\*(.+?)\*\*\n((?:   .+\n)*)', r'<div class="exercise-analysis"><h4>\1</h4><div class="exercise-details">\2</div></div>', html, flags=re.MULTILINE | re.DOTALL)
+        
+        # Convert priority actions  
+        html = re.sub(r'^⚡ \*\*Priority Actions\*\*:$', r'<div class="priority-actions"><h3>⚡ Priority Actions</h3><ol>', html, flags=re.MULTILINE)
+        html = re.sub(r'^   (\d+)\. (.+)$', r'<li class="priority-item">\2</li>', html, flags=re.MULTILINE)
+        
+        # Convert progress indicators
+        html = re.sub(r'^📊 \*\*Overall Progress\*\*: (.+)$', r'<div class="overall-progress">📊 <strong>Overall Progress</strong>: \1</div>', html, flags=re.MULTILINE)
         
         # Convert grades to styled spans
-        html = re.sub(r'(A\+|A|B\+|B|C\+|C|D) \((\d+)/100\)', r'<span class="grade">\1 (\2/100)</span>', html)
+        html = re.sub(r'(A\+|A|B\+|B|C\+|C|D) \((\d+)/100\)', r'<span class="grade grade-\1">\1 (\2/100)</span>', html)
         
-        # Convert line breaks to HTML
-        html = html.replace('\n', '<br>\n')
+        # Convert trend emojis to styled spans
+        html = re.sub(r'(📈|📉|➡️)', r'<span class="trend">\1</span>', html)
         
-        # Clean up extra br tags
-        html = re.sub(r'(<br>\n){3,}', '<br><br>\n', html)
+        # Convert percentages to styled spans
+        html = re.sub(r'([+-]?\d+\.?\d*%)', r'<span class="percentage">\1</span>', html)
+        
+        # Wrap consecutive list items in ul tags where not already wrapped
+        html = re.sub(r'(<li class="main-point">.*?</li>(?:\n<li class="main-point">.*?</li>)*)', r'<ul class="main-list">\1</ul>', html, flags=re.DOTALL)
+        
+        # Close open recommendation divs
+        html = html.replace('</ul></div><div class="recommendations', '</ul></div>\n<div class="recommendations')
+        html = html + '</ul></div>' if 'recommendations' in html and not html.endswith('</ul></div>') else html
+        
+        # Close priority actions
+        html = html.replace('<ol>\n<li class="priority-item">', '<ol><li class="priority-item">')
+        if 'priority-actions' in html and not html.endswith('</ol></div>'):
+            html = html + '</ol></div>'
+        
+        # Convert line breaks to HTML paragraphs for better structure
+        # Split into paragraphs first
+        paragraphs = html.split('\n\n')
+        formatted_paragraphs = []
+        
+        for para in paragraphs:
+            para = para.strip()
+            if para:
+                # Don't wrap if already has HTML tags
+                if '<div' in para or '<h' in para or '<ul' in para or '<ol' in para or '<li' in para:
+                    formatted_paragraphs.append(para)
+                else:
+                    # Wrap plain text in paragraphs
+                    para = para.replace('\n', '<br>')
+                    formatted_paragraphs.append(f'<p>{para}</p>')
+        
+        html = '\n\n'.join(formatted_paragraphs)
         
         return html
     
