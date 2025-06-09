@@ -167,7 +167,7 @@ Provide a personalized summary that feels like it's from an experienced coach wh
                     "role": "user", 
                     "content": prompt
                 }],
-                max_tokens=120,  # Keep it concise
+                max_tokens=500,  # Keep it concise
                 temperature=0.7,  # Some creativity but stay factual
                 top_p=0.9
             )
@@ -218,7 +218,7 @@ Give practical, specific advice for the next session. Keep it to 1-2 actionable 
                     "role": "user",
                     "content": prompt
                 }],
-                max_tokens=80,
+                max_tokens=1000,
                 temperature=0.6
             )
             
@@ -284,7 +284,7 @@ Example: "Bench Press: RPE 9.5+ indicates weight too high - focus on controlled 
                     "role": "user",
                     "content": prompt
                 }],
-                max_tokens=150,
+                max_tokens=1000,
                 temperature=0.5
             )
             
@@ -355,7 +355,7 @@ Keep response to 2-3 sentences maximum. Be specific and actionable."""
                     "role": "user",
                     "content": prompt
                 }],
-                max_tokens=120,
+                max_tokens=1000,
                 temperature=0.6
             )
             
@@ -429,7 +429,7 @@ Keep to 3-4 actionable points. Be specific and motivational."""
                     "role": "user",
                     "content": prompt
                 }],
-                max_tokens=180,
+                max_tokens=1000,
                 temperature=0.7
             )
             
@@ -475,7 +475,7 @@ Keep concise and actionable (2 sentences max)."""
                     "role": "user",
                     "content": prompt
                 }],
-                max_tokens=100,
+                max_tokens=500,
                 temperature=0.6
             )
             
@@ -947,21 +947,12 @@ class EmailSender:
             # Check if content has AI insights
             has_ai_content = "🤖" in content_to_convert
             
-            # Convert to HTML with enhanced formatting
+            # Always use the full coaching report content directly
+            full_html_content = self.markdown_to_html(content_to_convert)
             if has_ai_content:
-                full_html_content = self.markdown_to_html(content_to_convert)
                 print("📧 Email includes full AI coaching insights")
             else:
-                # Add AI unavailable notice and use simpler conversion
-                ai_notice = """
-<div class="ai-notice" style="background: linear-gradient(135deg, #ffc107 0%, #ff8a00 100%); color: white; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
-    <h3 style="margin: 0 0 10px 0;">🤖 AI Coaching Insights Unavailable</h3>
-    <p style="margin: 0; font-size: 0.95em;">AI insights require OpenAI API key configuration. The structured recommendations below are still comprehensive and actionable!</p>
-</div>
-                """
-                basic_html = self.simple_markdown_to_html(content_to_convert)
-                full_html_content = ai_notice + basic_html
-                print("📧 Email using structured recommendations (AI unavailable)")
+                print("📧 Email includes full coaching report with structured recommendations")
             
             # Create comprehensive HTML email body
             html_body = f"""
@@ -1067,19 +1058,22 @@ class EmailSender:
                     
                     /* AI sections */
                     .ai-section {{
-                        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
-                        border-left: 4px solid #e91e63;
+                        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+                        border-left: 4px solid #2196f3;
                         padding: 15px;
                         margin: 15px 0;
                         border-radius: 0 6px 6px 0;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     }}
                     .ai-section h3 {{
                         margin-top: 0;
-                        color: #c2185b;
+                        color: #1976d2;
+                        font-size: 1.1em;
                     }}
                     .ai-content {{
                         margin: 8px 0;
                         line-height: 1.6;
+                        color: #424242;
                     }}
                     
                     /* Metrics */
@@ -1158,14 +1152,25 @@ class EmailSender:
                         margin: 10px 0;
                         padding: 12px;
                     }}
-                    .exercise-analysis h4 {{
+                    .exercise-analysis h4, h4.exercise-name {{
                         margin-top: 0;
                         margin-bottom: 8px;
                         color: #2c3e50;
+                        border-bottom: 1px solid #dee2e6;
+                        padding-bottom: 4px;
                     }}
                     .exercise-details {{
                         font-size: 0.95em;
                         line-height: 1.5;
+                    }}
+                    
+                    /* Session data formatting */
+                    .session-data {{
+                        margin: 8px 0;
+                        padding: 8px;
+                        background: #e9ecef;
+                        border-radius: 4px;
+                        font-family: monospace;
                     }}
                     
                     /* Priority Actions */
@@ -1384,38 +1389,64 @@ Generated by Hevy Coach Pro
         
         summary = ""
         
-        # Extract session quality
+        # Extract key info from the actual coaching report format
         for line in lines:
-            if "Overall Grade" in line:
-                summary += f"📊 {line.strip()}\n"
-            elif "Assessment" in line:
-                summary += f"📝 {line.strip()}\n"
-            elif "Progression" in line and "progressed" in line:
-                summary += f"💪 {line.strip()}\n"
+            if "🎯 **Overall Grade**:" in line:
+                grade = line.split(":", 1)[1].strip()
+                summary += f"📊 Overall Grade: {grade}\n"
+            elif "📝 **Assessment**:" in line:
+                assessment = line.split(":", 1)[1].strip()
+                summary += f"📝 Assessment: {assessment}\n"
+            elif "💪 **Progression**:" in line:
+                progression = line.split(":", 1)[1].strip()
+                summary += f"💪 Progression: {progression}\n"
+            elif "📅 **Latest Session**:" in line:
+                session = line.split(":", 1)[1].strip()
+                summary += f"📅 Latest Session: {session}\n"
+            elif "📅 **Next Workout**:" in line:
+                workout = line.split(":", 1)[1].strip()
+                summary += f"🎯 Next Workout: {workout}\n"
         
-        summary += f"\n🎯 NEXT SESSION ACTIONS:\n"
-        summary += f"────────────────────────\n"
-        
-        # Extract weight adjustments
-        in_adjustments = False
-        adjustment_count = 0
+        # Extract AI coach insights
+        ai_insights = []
+        in_ai_section = False
         for line in lines:
-            if "Weight Adjustments Needed" in line:
-                in_adjustments = True
-            elif "Keep These Weights" in line:
-                in_adjustments = False
-            elif line.startswith("• **") and in_adjustments and adjustment_count < 3:
-                exercise = line.split("**")[1]
-                summary += f"🔧 {exercise}\n"
-                adjustment_count += 1
+            if "🤖 **AI COACH INSIGHTS**:" in line:
+                in_ai_section = True
+                continue
+            elif in_ai_section and line.strip() and not line.startswith("🎯"):
+                if line.strip() and len(ai_insights) < 2:  # Get first 2 lines of AI insights
+                    ai_insights.append(line.strip())
+            elif "🎯 **Next Session Focus**:" in line:
+                in_ai_section = False
+                break
         
-        if adjustment_count == 0:
-            summary += f"✅ All exercises at optimal weights!\n"
+        if ai_insights:
+            summary += f"\n🤖 AI INSIGHTS:\n"
+            for insight in ai_insights:
+                summary += f"• {insight}\n"
         
-        # Add key insights
-        summary += f"\n💡 KEY FOCUS:\n"
-        summary += f"• Aim for RPE 7.5-9 for optimal growth\n"
-        summary += f"• Listen to your body and adjust accordingly\n"
+        # Extract priority actions
+        priority_actions = []
+        in_priority = False
+        for line in lines:
+            if "⚡ **Priority Actions**:" in line:
+                in_priority = True
+                continue
+            elif in_priority and line.strip().startswith("   1."):
+                action = line.strip()[6:].strip()  # Remove "   1. "
+                priority_actions.append(action)
+            elif in_priority and line.strip().startswith("   2."):
+                action = line.strip()[6:].strip()  # Remove "   2. "
+                priority_actions.append(action)
+                break  # Stop after getting 2 actions
+            elif in_priority and line.strip() and not line.strip().startswith("   "):
+                in_priority = False
+        
+        if priority_actions:
+            summary += f"\n⚡ PRIORITY ACTIONS:\n"
+            for i, action in enumerate(priority_actions, 1):
+                summary += f"{i}. {action}\n"
         
         return summary
     
@@ -1430,8 +1461,9 @@ Generated by Hevy Coach Pro
         html = re.sub(r'^🏋️‍♂️  (.+)$', r'<h1 class="main-title">🏋️‍♂️ \1</h1>', html, flags=re.MULTILINE)
         html = re.sub(r'^🚀 (.+)$', r'<div class="quick-summary-header"><h1>🚀 \1</h1></div>', html, flags=re.MULTILINE)
         
-        # Convert section headers with emojis 
-        html = re.sub(r'^(⭐|📈|🎯|🔄|📊|🏆|📋) \*\*(.+?)\*\*$', r'<h2 class="section-header">\1 <strong>\2</strong></h2>', html, flags=re.MULTILINE)
+        # Convert section headers with emojis (handle both formats)
+        html = re.sub(r'^(⭐|📈|🎯|🔄|📊|🏆|📋|🤖|⚡|💪|😴|📅|📚) \*\*(.+?)\*\*$', r'<h2 class="section-header">\1 <strong>\2</strong></h2>', html, flags=re.MULTILINE)
+        html = re.sub(r'^(⭐|📈|🎯|🔄|📊|🏆|📋|🤖|⚡|💪|😴|📅|📚) (.+)$', r'<h2 class="section-header">\1 \2</h2>', html, flags=re.MULTILINE)
         
         # Convert subsection headers
         html = re.sub(r'^\*\*(.+?)\*\*$', r'<h3 class="subsection-header">\1</h3>', html, flags=re.MULTILINE)
@@ -1445,7 +1477,10 @@ Generated by Hevy Coach Pro
         
         # Convert AI sections with special styling
         html = re.sub(r'^🤖 \*\*(.+?)\*\*:$', r'<div class="ai-section"><h3>🤖 \1</h3>', html, flags=re.MULTILINE)
-        html = re.sub(r'^   (.+)$', r'<p class="ai-content">\1</p></div>', html, flags=re.MULTILINE)
+        html = re.sub(r'^   (.+)$', r'<div class="ai-content">\1</div>', html, flags=re.MULTILINE)
+        
+        # Handle multi-line AI content
+        html = re.sub(r'(🤖 \*\*[^:]+\*\*:.*?)(?=\n\n|\n[^   ]|\Z)', r'<div class="ai-section">\1</div>', html, flags=re.DOTALL)
         
         # Convert metric lines with special styling
         html = re.sub(r'^🎯 \*\*(.+?)\*\*: (.+)$', r'<div class="metric primary">🎯 <strong>\1</strong>: \2</div>', html, flags=re.MULTILINE)
@@ -1462,18 +1497,30 @@ Generated by Hevy Coach Pro
         html = re.sub(r'^✅ \*\*Maintain Current Weights\*\*:$', r'<div class="recommendations maintain"><h4>✅ Maintain Current Weights</h4><ul>', html, flags=re.MULTILINE)
         html = re.sub(r'^💡 \*\*General Recommendations\*\*:$', r'</ul></div><div class="recommendations general"><h4>💡 General Recommendations</h4><ul>', html, flags=re.MULTILINE)
         
+        # Handle session data lines
+        html = re.sub(r'   Sessions: (.+)$', r'<div class="session-data">Sessions: \1</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'   Trend: (.+)$', r'<div class="session-data">Trend: \1</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'   Overall: (.+)$', r'<div class="session-data">Overall: \1</div>', html, flags=re.MULTILINE)
+        html = re.sub(r'   Peak RPE: (.+)$', r'<div class="session-data">Peak RPE: \1</div>', html, flags=re.MULTILINE)
+        
         # Convert bullet points with proper nesting
         html = re.sub(r'^   • \*\*(.+?)\*\*: (.+)$', r'<li class="exercise-rec"><strong>\1</strong>: \2</li>', html, flags=re.MULTILINE)
         html = re.sub(r'^   • (.+)$', r'<li class="general-rec">\1</li>', html, flags=re.MULTILINE)
         html = re.sub(r'^• \*\*(.+?)\*\*: (.+)$', r'<li class="main-point"><strong>\1</strong>: \2</li>', html, flags=re.MULTILINE)
         html = re.sub(r'^• (.+)$', r'<li class="main-point">\1</li>', html, flags=re.MULTILINE)
         
-        # Convert exercise analysis blocks
+        # Convert exercise analysis blocks (both with and without indentation)
         html = re.sub(r'^\*\*(.+?)\*\*\n((?:   .+\n)*)', r'<div class="exercise-analysis"><h4>\1</h4><div class="exercise-details">\2</div></div>', html, flags=re.MULTILINE | re.DOTALL)
+        
+        # Handle exercise names with session data
+        html = re.sub(r'^\*\*([^*]+)\*\*$', r'<h4 class="exercise-name">\1</h4>', html, flags=re.MULTILINE)
         
         # Convert priority actions  
         html = re.sub(r'^⚡ \*\*Priority Actions\*\*:$', r'<div class="priority-actions"><h3>⚡ Priority Actions</h3><ol>', html, flags=re.MULTILINE)
         html = re.sub(r'^   (\d+)\. (.+)$', r'<li class="priority-item">\2</li>', html, flags=re.MULTILINE)
+        
+        # Handle numbered lists that might appear in coaching content
+        html = re.sub(r'^(\d+)\. (.+)$', r'<ol><li>\2</li></ol>', html, flags=re.MULTILINE)
         
         # Convert progress indicators
         html = re.sub(r'^📊 \*\*Overall Progress\*\*: (.+)$', r'<div class="overall-progress">📊 <strong>Overall Progress</strong>: \1</div>', html, flags=re.MULTILINE)
@@ -1482,7 +1529,7 @@ Generated by Hevy Coach Pro
         html = re.sub(r'(A\+|A|B\+|B|C\+|C|D) \((\d+)/100\)', r'<span class="grade grade-\1">\1 (\2/100)</span>', html)
         
         # Convert trend emojis to styled spans
-        html = re.sub(r'(📈|📉|➡️)', r'<span class="trend">\1</span>', html)
+        html = re.sub(r'(📈|📉|➡️|⬇️|⬆️|🎯|⚠️|✅|🔄|🏆)', r'<span class="trend">\1</span>', html)
         
         # Convert percentages to styled spans
         html = re.sub(r'([+-]?\d+\.?\d*%)', r'<span class="percentage">\1</span>', html)
