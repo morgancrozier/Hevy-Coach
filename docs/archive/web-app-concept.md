@@ -1,3 +1,5 @@
+> Historical design notes. Not current features, setup instructions, or a maintenance commitment.
+
 # 🌐 Hevy Coach Web App Concept
 
 ## 🎯 **Vision: One-Click Hevy Coaching**

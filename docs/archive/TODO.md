@@ -1,3 +1,5 @@
+> Historical design notes. Not current features, setup instructions, or a maintenance commitment.
+
 # 📋 TODO List
 
 ## ✅ Completed Items

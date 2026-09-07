@@ -57,4 +57,13 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-*.log 
+*.log
+# Local setup and private runtime output
+.venv/
+rep_rules.py
+rep_rules.local.py
+routine_config.py
+routine_config.local.py
+last_processed_state.json
+.hevy-state/
+reports/

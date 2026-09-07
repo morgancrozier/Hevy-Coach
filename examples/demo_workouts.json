@@ -1,0 +1,402 @@
+{
+  "description": "Entirely synthetic demonstration. Fixed dates; never relative to today.",
+  "targets": {
+    "Bench Press (Barbell)": [
+      6,
+      10
+    ],
+    "Pull Up (Assisted)": [
+      6,
+      10
+    ],
+    "Chest Supported Row": [
+      8,
+      12
+    ]
+  },
+  "workouts": [
+    {
+      "id": "demo-upper-1",
+      "title": "Upper body",
+      "routine_id": "demo-upper",
+      "start_time": "2025-01-01T17:00:00Z",
+      "exercises": [
+        {
+          "title": "Bench Press (Barbell)",
+          "exercise_template_id": "demo-bench",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 8,
+              "rpe": 7.5
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 7,
+              "rpe": 8
+            }
+          ]
+        },
+        {
+          "title": "Pull Up (Assisted)",
+          "exercise_template_id": "demo-pull",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8.5
+            }
+          ]
+        },
+        {
+          "title": "Chest Supported Row",
+          "exercise_template_id": "demo-row",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 12,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 10,
+              "rpe": null
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 9,
+              "rpe": 8.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-upper-2",
+      "title": "Upper body",
+      "routine_id": "demo-upper",
+      "start_time": "2025-01-08T17:00:00Z",
+      "exercises": [
+        {
+          "title": "Bench Press (Barbell)",
+          "exercise_template_id": "demo-bench",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 9,
+              "rpe": 7.5
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 9,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 8,
+              "rpe": 8
+            }
+          ]
+        },
+        {
+          "title": "Pull Up (Assisted)",
+          "exercise_template_id": "demo-pull",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8.5
+            }
+          ]
+        },
+        {
+          "title": "Chest Supported Row",
+          "exercise_template_id": "demo-row",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 12,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 10,
+              "rpe": null
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 9,
+              "rpe": 8.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-upper-3",
+      "title": "Upper body",
+      "routine_id": "demo-upper",
+      "start_time": "2025-01-15T17:00:00Z",
+      "exercises": [
+        {
+          "title": "Bench Press (Barbell)",
+          "exercise_template_id": "demo-bench",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 10,
+              "rpe": 7.5
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 10,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 10,
+              "rpe": 8
+            }
+          ]
+        },
+        {
+          "title": "Pull Up (Assisted)",
+          "exercise_template_id": "demo-pull",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 8,
+              "rpe": 8.5
+            }
+          ]
+        },
+        {
+          "title": "Chest Supported Row",
+          "exercise_template_id": "demo-row",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 12,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 10,
+              "rpe": null
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 9,
+              "rpe": 8.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-morning",
+      "title": "Short morning session",
+      "start_time": "2025-01-22T08:00:00Z",
+      "exercises": [
+        {
+          "title": "Push Up",
+          "exercise_template_id": "demo-push",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 0,
+              "reps": 12,
+              "rpe": null
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 0,
+              "reps": 12,
+              "rpe": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-upper-4",
+      "title": "Upper body",
+      "routine_id": "demo-upper",
+      "start_time": "2025-01-22T17:00:00Z",
+      "exercises": [
+        {
+          "title": "Bench Press (Barbell)",
+          "exercise_template_id": "demo-bench",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 11,
+              "rpe": 7.5
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 10,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 50,
+              "reps": 10,
+              "rpe": 8
+            }
+          ]
+        },
+        {
+          "title": "Pull Up (Assisted)",
+          "exercise_template_id": "demo-pull",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 8,
+              "rpe": 8
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 7,
+              "rpe": 8.5
+            }
+          ]
+        },
+        {
+          "title": "Chest Supported Row",
+          "exercise_template_id": "demo-row",
+          "sets": [
+            {
+              "index": 0,
+              "type": "normal",
+              "weight_kg": 30,
+              "reps": 12,
+              "rpe": 8
+            },
+            {
+              "index": 1,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 11,
+              "rpe": null
+            },
+            {
+              "index": 2,
+              "type": "normal",
+              "weight_kg": 35,
+              "reps": 10,
+              "rpe": 8.5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+> Historical design notes. Not current features, setup instructions, or a maintenance commitment.
+
 # 🚀 Hevy Coach - Improvements Roadmap
 
 **Last Updated**: 2025-01-03  
